@@ -56,9 +56,17 @@ public:
 		devices[deviceKey].SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered);
 	}
 	
-	void PurgeOldDevices()
+	void PurgeOldDevices(unsigned currentTime)
 	{
-		
+		std::map<std::string, LIFXDevice>::iterator itr = devices.begin();
+		while (itr != devices.end()) {
+			if (itr->second.Expired(currentTime)) {
+				//std::cout << "purging device " << itr->second.GetName() << "\n";
+			   itr = devices.erase(itr);
+			} else {
+			   ++itr;
+			}
+		}
 	}
 	
 	std::string ToString() const {

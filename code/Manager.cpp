@@ -137,18 +137,8 @@ namespace lifx {
     void Manager::ReadPacket() {
         Packet packet;
         if (socket->Receive(packet)) {
-			    lastRecvTime = socket->GetTicks();
-			//uint32_t source = packet.GetSource();
-			//if(source == 0x31415926)
-			//{
-				//std::cout << "RX:" << packet.ToString() << "\n";
-				HandleNewPacket(packet);
-			//}
-			//else
-			//{
-			//	printf("Packet from unknown source 0x%08x ", source);
-			//	std::cout << packet.ToString()  << "\n";
-			//}
+			lastRecvTime = socket->GetTicks();
+			HandleNewPacket(packet);
         }
     }
 	
@@ -174,7 +164,7 @@ namespace lifx {
 	{
 		for(auto& it : groups)
 		{
-			it.second.PurgeOldDevices();
+			it.second.PurgeOldDevices(socket->GetTicks());
 		}
 	}
 	

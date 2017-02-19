@@ -54,17 +54,8 @@ int main(int argc, const char* argv[]) {
 	{
 		manager.Discover();
 		manager.PurgeOldDevices();
-		manager.ListGroups();
+		//manager.ListGroups();
 	}
 
     return 0;
 }
-
-	#if 0
-        sscanf(argv[1], "%hu", &hue);
-        sscanf(argv[2], "%hu", &saturation);
-        sscanf(argv[3], "%f", &brightness);
-        sscanf(argv[4], "%hu", &kelvin);
-		sscanf(argv[5], "%iu", &fade_time);
-		
-		#endif

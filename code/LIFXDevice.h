@@ -31,6 +31,11 @@ public:
 		return addr;
 	}
 	
+	bool Expired(unsigned currentTime)
+	{
+		return ((last_discovered + ExpiryTime) < currentTime);
+	}
+	
 	uint16_t GetHue()
 	{
 		return hue;
@@ -106,5 +111,6 @@ protected:
 	uint16_t brightness;
 	uint16_t kelvin;
 	uint32_t last_discovered;
+	static const unsigned ExpiryTime = 30000;
 };
 }
