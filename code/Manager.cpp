@@ -27,8 +27,12 @@ namespace lifx {
 
     void Manager::ListGroups(void)
 	{
-		for (const auto& it : groups) {
-			std::cout << it.second.ToString() << "\n";
+		std::string thisprint;
+		for (const auto it : groups) {
+			thisprint = it.second->ToString();
+			if(thisprint != lastprint)
+				std::cout << thisprint << "\n";
+				lastprint = thisprint;
         }
 	}
 	
@@ -48,6 +52,7 @@ namespace lifx {
 
         Payload::LightColorHSL lc;
 		Payload::SetPower sp;
+		
 		if(brightness == 0)
 		{
 			sp.level = 0;
@@ -63,19 +68,20 @@ namespace lifx {
 		lc.kelvin = kelvin;
         lc.fade_time = fade_time;
 		
-		for (auto& it : groups) {
-			if(it.first == group)
+		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		{
+			if(it->first == group)
 			{
-				for(auto& it2 : it.second.devices)
+				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-					packet2.SetPower(sp, 0, it2.second.GetAddress());
-					Send(packet2);
-					packet.SetLightColorHSL(lc, 0,it2.second.GetAddress());
-					Send(packet);
 					if(save)
 					{
-						it2.second.SetAttributes(lc.hue, lc.saturation, lc.brightness, lc.kelvin, sp.level);
+						it2->second->SaveState();
 					}
+					packet2.SetPower(sp, 0, it2->second->Address());
+					Send(packet2);
+					packet.SetLightColorHSL(lc, 0,it2->second->Address());
+					Send(packet);
 				}
 			}
 		}
@@ -90,30 +96,34 @@ namespace lifx {
 		sp.Initialize();
         lc.Initialize();
 		
-		for (auto& it : groups) {
-			if(it.first == group)
+		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		{
+			if(it->first == group)
 			{
-				for(auto& it2 : it.second.devices)
+				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-					sp.level = it2.second.GetPower();
-					lc.hue = it2.second.GetHue();
-					lc.saturation = it2.second.GetSaturation();
-					lc.brightness = it2.second.GetBrightness();
-					lc.kelvin = it2.second.GetKelvin();
+					sp.level = it2->second->SavedPower();
+					lc.hue = it2->second->SavedHue();
+					lc.saturation = it2->second->SavedSaturation();
+					lc.brightness = it2->second->SavedBrightness();
+					lc.kelvin = it2->second->SavedKelvin();
 					lc.fade_time = fade_time;
 		
-					packet2.SetPower(sp, 0, it2.second.GetAddress());
+					packet2.SetPower(sp, 0, it2->second->Address());
 					Send(packet2);
-					packet.SetLightColorHSL(lc, 0,it2.second.GetAddress());
+					packet.SetLightColorHSL(lc, 0, it2->second->Address());
 					Send(packet);
 				}
 			}
 		}
     }
 	
-	
-	void Manager::LightsUp(std::string group) {
+	void Manager::LightsRestore(std::string group) {
 		RestoreColor(group, 10000);
+	}
+	
+	void Manager::LightsUp(std::string group, bool save) {
+		SetColor(group, 0, 0, 100, 5500, 10000, save);
 	}
 	
 	void Manager::LightsDown(std::string group, bool save) {
@@ -142,12 +152,13 @@ namespace lifx {
         }
     }
 	
-	void Manager::SetGroupDeviceAttributes(MacAddress target, std::string label, uint16_t hue, uint16_t saturation, uint16_t brightness, uint16_t kelvin, uint16_t power, unsigned last_discovered)
+	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered)
 	{
-		for (auto& it : groups) {
-			if(it.second.ContainsDevice(target))
+		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		{
+			if(it->second->ContainsDevice(target))
 			{
-				it.second.SetDeviceAttributes(target, label, hue, saturation, brightness, kelvin, power, last_discovered);
+				it->second->SetDeviceAttributes(target, label, hue, saturation, brightness, kelvin, power, last_discovered);
 			}
 		}
 	}
@@ -156,22 +167,22 @@ namespace lifx {
 	{
 		if(groups.find(label) == groups.end())
 		{
-			groups[label] = Group(label);
+			groups[label] = new Group(label);
 		}
 	}
 	
 	void Manager::PurgeOldDevices()
 	{
-		for(auto& it : groups)
+		for(auto it : groups)
 		{
-			it.second.PurgeOldDevices(socket->GetTicks());
+			it.second->PurgeOldDevices(socket->GetTicks());
 		}
 	}
 	
 	void Manager::AddGroupDevice(std::string groupName, MacAddress target)
 	{
 		AddGroup(groupName);
-		groups[groupName].AddDevice(target);
+		groups[groupName]->AddDevice(target);
 	}
 	
     void Manager::HandleNewPacket(const Packet& packet) {

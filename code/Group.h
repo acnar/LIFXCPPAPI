@@ -18,30 +18,29 @@ public:
 		devices.clear();
 	}
 	
-	void AddDevice(MacAddress address)
+	void AddDevice(const MacAddress& address)
 	{
 		std::string devName = GetDevice(address);
 		
 		if(devName == "")
 		{
-			std::string label = address.ToString();
-			devices[address.ToString()] = LIFXDevice(label, address);
+			devices[address.ToString()] = new LIFXDevice(address);
 		}
 	}
 	
-	std::string GetDevice(MacAddress address)
+	const std::string GetDevice(MacAddress address)
 	{
-		std::string label = "";
+		std::string devname = "";
 		
 		for (auto& it : devices) {
-			if(it.second.GetAddress() == address)
+			if(it.second->Address() == address)
 			{
-				label = it.second.GetName();
+				devname = it.second->Name();
 				break;
 			}
 		}
 		
-		return label;
+		return devname;
 	}
 	
 	bool ContainsDevice(MacAddress address)
@@ -50,22 +49,28 @@ public:
 		return (devices.find(deviceKey) != devices.end());
 	}
 	
-	void SetDeviceAttributes(MacAddress target, std::string label, uint16_t hue, uint16_t saturation, uint16_t brightness, uint16_t kelvin, uint16_t power, unsigned last_discovered)
+	void SetDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered)
 	{
-		std::string deviceKey = target.ToString();
-		devices[deviceKey].SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered);
+		devices[target.ToString()]->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered);
 	}
 	
 	void PurgeOldDevices(unsigned currentTime)
 	{
-		std::map<std::string, LIFXDevice>::iterator itr = devices.begin();
+		std::map<std::string, LIFXDevice*>::iterator itr = devices.begin();
 		while (itr != devices.end()) {
-			if (itr->second.Expired(currentTime)) {
-				//std::cout << "purging device " << itr->second.GetName() << "\n";
+			if (itr->second->Expired(currentTime)) {
 			   itr = devices.erase(itr);
 			} else {
 			   ++itr;
 			}
+		}
+	}
+	
+	void SaveState()
+	{
+		for (auto& it: devices)
+		{
+			it.second->SaveState();
 		}
 	}
 	
@@ -75,12 +80,12 @@ public:
 		ret << "===============================\n";
 		for(const auto& it : devices)
 		{
-		    ret << "Device: " << it.second.ToString() << "\n\n";
+		    ret << "Device: " << it.second->ToString() << "\n\n";
 		}
 		return ret.str();
 	}
 	
-	std::map<std::string, LIFXDevice> devices;
+	std::map<std::string, LIFXDevice*> devices;
 protected:
 	
 	std::string name;

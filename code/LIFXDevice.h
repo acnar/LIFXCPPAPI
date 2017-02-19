@@ -2,20 +2,26 @@
 
 namespace lifx {
 class LIFXDevice {
-public:
-	LIFXDevice()
+	public:
+	
+	LIFXDevice(const MacAddress& address = MacAddress())
 	{
 		name = "Unnamed Device";
-		addr = MacAddress();
+		addr = address;
 		power = 0;
 		hue = 0;
 		saturation = 0;
 		brightness = 0;
 		kelvin = 0;
 		last_discovered = 0;
+		saved_hue = 0;
+		saved_saturation = 0;
+		saved_kelvin = 0;
+		saved_brightness = 0;
+		saved_power = 0;
 	}
-	
-	LIFXDevice(std::string& n, MacAddress a, uint16_t p=0, uint16_t h=0, uint16_t s=0, uint16_t b=0, uint16_t k=0, unsigned d=0):
+	#if 0
+	LIFXDevice(const std::string& n, const MacAddress& a, const uint16_t& p=0, const uint16_t& h=0, const uint16_t& s=0, const uint16_t& b=0, const uint16_t& k=0, const unsigned& d=0):
 		name(n), addr(a)
 	{
 		power = p;
@@ -25,52 +31,28 @@ public:
 		kelvin = k;
 		last_discovered = d;
 	}
-	
-	MacAddress GetAddress()
-	{
-		return addr;
-	}
-	
+	#endif
 	bool Expired(unsigned currentTime)
 	{
 		return ((last_discovered + ExpiryTime) < currentTime);
 	}
+
+	const MacAddress& Address() const { return addr; }
+	void Address(const MacAddress& address) { addr = address; }
 	
-	uint16_t GetHue()
-	{
-		return hue;
-	}
+	const uint16_t& SavedHue() const { return saved_hue; }
+	const uint16_t& SavedBrightness() const { return saved_brightness; }
+	const uint16_t& SavedKelvin() const { return saved_kelvin; }
+	const uint16_t& SavedSaturation() const { return saved_saturation; }
+	const uint16_t& SavedPower() const { return saved_power; }
 	
-	uint16_t GetSaturation()
-	{
-		return saturation;
-	}
-	
-	uint16_t GetBrightness()
-	{
-		return brightness;
-	}
-	
-	uint16_t GetKelvin()
-	{
-		return kelvin;
-	}
-	
-	uint16_t GetPower()
-	{
-		return power;
-	}
-	
-	std::string GetName()
-	{
-		return name;
-	}
-	
-	void SetName(std::string& n)
-	{
-		name = n;
-	}
-	
+	const uint16_t& Hue() const { return hue; }
+	const uint16_t& Saturation() const { return saturation; }
+	const uint16_t& Kelvin() const { return kelvin; }
+	const uint16_t& Brightness() const { return brightness; }
+	const uint16_t& Power() const { return power; }
+	const std::string& Name() const {return name;}
+#if 0
 	void SetAttributes(uint16_t h, uint16_t s, uint16_t b, uint16_t k, uint16_t p)
 	{
 		hue = h;
@@ -79,8 +61,17 @@ public:
 		kelvin = k;
 		power = p;
 	}
+#endif
+	void SaveState()
+	{
+		saved_brightness = brightness;
+		saved_hue = hue;
+		saved_kelvin = kelvin;
+		saved_power = power;
+		saved_saturation = saturation;
+	}
 	
-	void SetAttributes(std::string n, uint16_t h, uint16_t s, uint16_t b, uint16_t k, uint16_t p, unsigned d)
+	void SetAttributes(const std::string& n, const uint16_t& h, const uint16_t& s, const uint16_t& b, const uint16_t& k, const uint16_t& p, const unsigned& d)
 	{
 		name = n;
 		hue = h;
@@ -100,6 +91,7 @@ public:
 		ret << "\tBrightness: " << brightness << "\n";
 		ret << "\tKelvin: " << kelvin << "\n";
 		ret << "\tPower: " << power << "\n";
+		//printf("brightness in tostring %016p \n", (uintptr_t)&this->brightness);
 		return ret.str();
 	}
 protected:
@@ -110,7 +102,15 @@ protected:
 	uint16_t saturation;
 	uint16_t brightness;
 	uint16_t kelvin;
+
+	uint16_t saved_power;
+	uint16_t saved_hue;
+	uint16_t saved_saturation;
+	uint16_t saved_brightness;
+	uint16_t saved_kelvin;
+
 	uint32_t last_discovered;
+	
 	static const unsigned ExpiryTime = 30000;
 };
 }
