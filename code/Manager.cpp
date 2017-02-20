@@ -14,7 +14,7 @@
 #include "LIFXDevice.h"
 
 /* 
- * Class for Managing LIFX operations
+ * Class for managing LIFX devices.
  */
 namespace lifx {
 
@@ -26,13 +26,14 @@ namespace lifx {
     
     void Manager::ListGroups(void)
 	{
-		std::string thisprint;
+		std::string thisprint = "";
 		for (const auto it : groups) {
-			thisprint = it.second->ToString();
-			if(thisprint != lastprint)
-				std::cout << thisprint << "\n";
-				lastprint = thisprint;
+			thisprint += it.second->ToString() + "\n";
         }
+        
+        if(thisprint != lastprint)
+            std::cout << thisprint;
+            lastprint = thisprint;
 	}
 	
 	void Manager::Send(Packet& packet) {
@@ -45,13 +46,68 @@ namespace lifx {
         socket->Send(packet);
     }
 
+    void Manager::SubtractGroupDeviceAck(const MacAddress& target)
+    {
+        for(auto it : groups)
+		{
+			if(it.second->ContainsDevice(target))
+			{
+				it.second->devices[target.ToString()]->SubtractPendingAck();
+			}
+		}
+    }
+    
+    void Manager::SetColorAndPower(Packet& color, Packet& power, bool powerFirst, LIFXDevice* target, bool ack)
+    {
+        uint32_t retries = 15;
+        
+        while(retries > 0)
+        {
+            target->ClearPendingAcks();
+            target->AddPendingAcks(2);
+            
+            if(powerFirst)
+            {
+                /* Turn on the power first */
+                Send(power);
+            }
+            Send(color);
+            if(!powerFirst)
+            {
+                /* Turn off the power last */
+                Send(power);
+            }
+        
+            if(ack)
+            {
+                WaitForPackets(target, LIFXDevice::HasPendingAcks, false, 5000);
+                
+                if(!target->HasPendingAcks())
+                {
+                    break;
+                }
+                
+                retries --;
+            }
+            else
+            {
+                break;
+            }
+        }
+        
+        if(retries == 0)
+        {
+            perror("Unable to Set Color and/or Power\n");
+        }
+    }
+    
 	void Manager::SetColor(std::string group, uint16_t hue, uint16_t saturation, float brightness, uint16_t kelvin, uint32_t fade_time, bool save) {
         Packet packet;
 		Packet packet2;
 
         Payload::LightColorHSL lc;
 		Payload::SetPower sp;
-		
+        
 		if(brightness == 0)
 		{
 			sp.level = 0;
@@ -60,14 +116,15 @@ namespace lifx {
 		{
 			sp.level = 0xffff;
 		}
+        sp.duration = fade_time;
         lc.Initialize();
         lc.hue = hue;
         lc.saturation = saturation;
         lc.brightness = ((brightness / 100.0) * 0xffff);
 		lc.kelvin = kelvin;
         lc.fade_time = fade_time;
-		
-		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+
+		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
 			{
@@ -77,10 +134,10 @@ namespace lifx {
 					{
 						it2->second->SaveState();
 					}
-					packet2.SetPower(sp, 0, it2->second->Address());
-					Send(packet2);
-					packet.SetLightColorHSL(lc, 0,it2->second->Address());
-					Send(packet);
+                    packet2.SetPower(sp, 0, it2->second->Address(),1);
+                    packet.SetLightColorHSL(lc, 0, it2->second->Address(),1);
+                    
+                    SetColorAndPower(packet, packet2, sp.level != 0, it2->second, 0);
 				}
 			}
 		}
@@ -95,23 +152,24 @@ namespace lifx {
 		sp.Initialize();
         lc.Initialize();
 		
-		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
 					sp.level = it2->second->SavedPower();
+                    sp.duration = fade_time;
 					lc.hue = it2->second->SavedHue();
 					lc.saturation = it2->second->SavedSaturation();
 					lc.brightness = it2->second->SavedBrightness();
 					lc.kelvin = it2->second->SavedKelvin();
 					lc.fade_time = fade_time;
 		
-					packet2.SetPower(sp, 0, it2->second->Address());
-					Send(packet2);
-					packet.SetLightColorHSL(lc, 0, it2->second->Address());
-					Send(packet);
+					packet2.SetPower(sp, 0, it2->second->Address(), 1);
+					packet.SetLightColorHSL(lc, 0, it2->second->Address(), 1);
+					
+                    SetColorAndPower(packet, packet2, sp.level != 0, it2->second, 0);
 				}
 			}
 		}
@@ -133,16 +191,29 @@ namespace lifx {
 		Packet packet;
 		lastRecvTime = socket->GetTicks();
 		packet.Initialize(PacketType::GetService);
-        socket->Send(packet);
+        Send(packet);
+        WaitForPackets(nullptr, nullptr, false, timeout);
+        PurgeOldDevices();
+    }
+	
+    void Manager::WaitForPackets(LIFXDevice* device, LIFXDeviceFn terminator, bool condition, unsigned to)
+    {
+        unsigned lastRecvTime = socket->GetTicks();
+        
         while (1)
 		{
 			ReadPacket();
-			if ((lastRecvTime + timeout) < socket->GetTicks()) {
+            if(((terminator != nullptr) && ((device->*terminator)() == condition)))
+            {
+                break;
+            }
+			if ((lastRecvTime + to) < socket->GetTicks())
+            {
 				break;
 			}
 		}
     }
-	
+    
     void Manager::ReadPacket() {
         Packet packet;
         if (socket->Receive(packet)) {
@@ -153,7 +224,7 @@ namespace lifx {
 	
 	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered)
 	{
-		for (std::map<std::string, Group*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->second->ContainsDevice(target))
 			{
@@ -166,7 +237,7 @@ namespace lifx {
 	{
 		if(groups.find(label) == groups.end())
 		{
-			groups[label] = new Group(label);
+			groups[label] = new LIFXGroup(label);
 		}
 		
 		// Check if the device adding this group is in any other group
@@ -181,9 +252,13 @@ namespace lifx {
 	
 	void Manager::PurgeOldDevices()
 	{
-		for(auto it : groups)
-		{
-			it.second->PurgeOldDevices(socket->GetTicks());
+        std::map<std::string, LIFXGroup*>::iterator itr = groups.begin();
+		while (itr != groups.end()) {
+			if(itr->second->devices.size() == 0) {
+			   itr = groups.erase(itr);
+			} else {
+			   ++itr;
+			}
 		}
 	}
 	
@@ -212,6 +287,9 @@ namespace lifx {
 			Payload::LightStatus state = packet.GetLightStatus();
 			MacAddress target = packet.GetTargetMac();
 			SetGroupDeviceAttributes(target, state.label, state.hue, state.saturation, state.brightness, state.kelvin, state.power, socket->GetTicks());
-		}
+		} else if (packet.GetType() == PacketType::Acknowledgement){
+            MacAddress target = packet.GetTargetMac();
+            SubtractGroupDeviceAck(target);
+        }
     }
 }

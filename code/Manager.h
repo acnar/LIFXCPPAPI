@@ -1,10 +1,10 @@
 #include <string>
-#include "Group.h"
+#include "LIFXGroup.h"
 
 #pragma once
 
 namespace lifx {
-
+ 
 class Manager {
 	private:
 		
@@ -12,6 +12,7 @@ class Manager {
 		void HandleNewPacket(const Packet& packet);
 		
 	public:
+        typedef  bool (LIFXDevice::*LIFXDeviceFn)(void); 
 	    Manager(const std::string& broadcastIP);
 		void Initialize();
 		void Discover();
@@ -27,9 +28,12 @@ class Manager {
 		void LightsDown(std::string group, bool save);
 		void AddGroup(const std::string& label, const MacAddress& address);
 		void AddGroupDevice(std::string groupName, MacAddress target);
-		
+        void SubtractGroupDeviceAck(const MacAddress& target);
+        void WaitForPackets(LIFXDevice* device, LIFXDeviceFn terminator, bool condition, unsigned to);
+		void SetColorAndPower(Packet& color, Packet& power, bool powerFirst, LIFXDevice* target, bool ack);
+        
 		std::shared_ptr<Socket> socket;
-		std::map<std::string, Group*> groups;
+		std::map<std::string, LIFXGroup*> groups;
 		unsigned lastRecvTime;
 		std::string lastprint;
 		static const unsigned timeout = 1000;

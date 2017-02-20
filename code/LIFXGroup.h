@@ -4,15 +4,15 @@
 
 namespace lifx {
 class LIFXDevice;
-class Group {
+class LIFXGroup {
 public:
-	Group()
+	LIFXGroup()
 	{
 		name = "Unnamed Group";
 		devices.clear();
 	}
 	
-	Group(std::string n)
+	LIFXGroup(std::string n)
 	{
 		name = n;
 		devices.clear();

@@ -3,7 +3,7 @@
 namespace lifx {
 class LIFXDevice {
 	public:
-	
+         
 	LIFXDevice(const MacAddress& address = MacAddress())
 	{
 		name = "Unnamed Device";
@@ -19,6 +19,7 @@ class LIFXDevice {
 		saved_kelvin = 0;
 		saved_brightness = 0;
 		saved_power = 0;
+        pending_acks = 0;
 	}
 	
 	bool Expired(unsigned currentTime)
@@ -50,6 +51,26 @@ class LIFXDevice {
 		saved_power = power;
 		saved_saturation = saturation;
 	}
+    
+    void ClearPendingAcks()
+    {
+        pending_acks = 0;
+    }
+    
+    bool HasPendingAcks()
+    {
+        return pending_acks > 0;
+    }
+    
+    void AddPendingAcks(uint32_t num_acks)
+    {
+        pending_acks += num_acks;
+    }
+    
+    void SubtractPendingAck()
+    {
+        pending_acks--;
+    }
 	
 	void SetAttributes(const std::string& n, const uint16_t& h, const uint16_t& s, const uint16_t& b, const uint16_t& k, const uint16_t& p, const unsigned& d)
 	{
@@ -89,6 +110,8 @@ protected:
 	uint16_t saved_kelvin;
 
 	uint32_t last_discovered;
+    Packet last_packet;
+    uint32_t pending_acks;
 	
 	static const unsigned ExpiryTime = 120000;
 };

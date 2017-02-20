@@ -56,6 +56,7 @@ struct SetPower {
         memset(this, 0, sizeof(*this));
     }
 	uint16_t level;
+    uint32_t duration;
 };
 
 struct StatePower {
@@ -186,7 +187,7 @@ const uint16_t StateWifiInfo = 0x0011;
 const uint16_t GetWifiFirmware = 0x0012;
 const uint16_t StateWifiFirmware = 0x0013;
 const uint16_t GetPower = 0x0014;
-const uint16_t SetPower = 0x0015;
+const uint16_t SetPower = 0x0075;
 const uint16_t StatePower = 0x0016;
 const uint16_t GetLabel = 0x0017;
 const uint16_t SetLabel = 0x0018;
@@ -373,7 +374,7 @@ public:
     uint32_t GetSource()const {
 		return source;
 	}
-	
+    
     void Initialize(uint16_t type, uint8_t t = 1, MacAddress addr = MacAddress(),uint32_t src = 0, uint8_t areq = 0) {
         packet_type = type;
         protocol = Protocol::Send;
@@ -415,14 +416,14 @@ public:
         payload.lightColorRGBW = lightColor;
     }
 
-    void SetLightColorHSL(const Payload::LightColorHSL& lightColor, uint8_t tagged = 1, MacAddress target = MacAddress()) {
-        Initialize(PacketType::SetLightColorHSL, tagged, target);
+    void SetLightColorHSL(const Payload::LightColorHSL& lightColor, uint8_t tagged = 1, MacAddress target = MacAddress(), uint8_t ack = 0) {
+        Initialize(PacketType::SetLightColorHSL, tagged, target, 0, ack);
         size += sizeof(Payload::LightColorHSL);
         payload.lightColorHSL = lightColor;
     }
 	
-	void SetPower(const Payload::SetPower& power, uint8_t tagged = 1, MacAddress target = MacAddress()) {
-		Initialize(PacketType::SetPower, tagged, target);
+	void SetPower(const Payload::SetPower& power, uint8_t tagged = 1, MacAddress target = MacAddress(), uint8_t ack = 0) {
+		Initialize(PacketType::SetPower, tagged, target, 0, ack);
 		size += sizeof(Payload::SetPower);
 		payload.setPower = power;
 	}
@@ -481,6 +482,10 @@ public:
             ret << " (GetLightState)";
         } else if (packet_type == PacketType::SetDim) {
             ret << " (SetDim)";
+        } else if (packet_type == PacketType::Acknowledgement) {
+            ret << " (Acknowledgement)";
+        } else if (packet_type == PacketType::SetPower) {
+            ret << " (Set Power)";
         } else {
             ret << " (unknown)";
         }

@@ -33,7 +33,6 @@ void discovery(Manager* manager, bool *bgthread)
 	{
 		manager_mutex.lock();
 		manager->Discover();
-		manager->PurgeOldDevices();
 		//manager->ListGroups();
 		manager_mutex.unlock();
 		std::this_thread::sleep_for (std::chrono::seconds(5));
