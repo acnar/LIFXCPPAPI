@@ -25,7 +25,7 @@ class Manager {
 		void LightsRestore(std::string group);
 		void LightsUp(std::string group, bool save);
 		void LightsDown(std::string group, bool save);
-		void AddGroup(std::string label);
+		void AddGroup(const std::string& label, const MacAddress& address);
 		void AddGroupDevice(std::string groupName, MacAddress target);
 		
 		std::shared_ptr<Socket> socket;

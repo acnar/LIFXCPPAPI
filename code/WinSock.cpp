@@ -37,6 +37,30 @@ namespace lifx {
 			}
 		}
 
+        void Send(const std::string& data) {
+            int bytes;
+            std::string message = std::string(data);
+            
+            do {
+                bytes = write(_socket,message.c_str(),message.length());
+                message = message.substr(bytes, message.length());
+                if (bytes < 0)
+                    perror("ERROR writing message to socket.\n");
+                if (bytes == 0)
+                    break;
+            } while (message.length() > 0);
+
+        }
+        
+        std::string Receive(int bytes)
+        {
+            std::string output(bytes, 0);
+            if (read(_socket, &output[0], bytes-1)<0) {
+                perror("Failed to read data from socket.\n");
+            }
+            return output;
+        }   
+    
 		void Send(const Packet& packet) {
 			int sent = sendto(socket_,(const char*) &packet , packet.GetSize(), 0, (SOCKADDR*) &dest, sizeof(dest));
 			if (sent != packet.GetSize()) {
@@ -55,7 +79,7 @@ namespace lifx {
 			}
 
 			int fromLen = sizeof(from);
-			int recvd = recvfrom(socket_,(char*) &packet, sizeof(packet), 0, (SOCKADDR*) &from, &fromLen);
+			int recvd = recvfrom(socket_,(char*) &packet, sizeof(packet), MSG_DONTWAIT, (SOCKADDR*) &from, &fromLen);
 			return true;
 		}
 

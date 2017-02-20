@@ -13,18 +13,17 @@
 #include "Manager.h"
 #include "LIFXDevice.h"
 
+/* 
+ * Class for Managing LIFX operations
+ */
 namespace lifx {
 
     Manager::Manager(const std::string& broadcastIP) {
         socket = std::shared_ptr < Socket
                 > (Socket::CreateBroadcast(broadcastIP));
+        groups.clear();
     }
-
-    void Manager::Initialize() {
-		groups.clear();
-		Discover();
-    }
-
+    
     void Manager::ListGroups(void)
 	{
 		std::string thisprint;
@@ -86,7 +85,7 @@ namespace lifx {
 			}
 		}
     }
-	
+    
 	void Manager::RestoreColor(std::string group, uint32_t fade_time) {
         Packet packet;
 		Packet packet2;
@@ -163,11 +162,20 @@ namespace lifx {
 		}
 	}
 
-    void Manager::AddGroup(std::string label)
+    void Manager::AddGroup(const std::string& label, const MacAddress& target)
 	{
 		if(groups.find(label) == groups.end())
 		{
 			groups[label] = new Group(label);
+		}
+		
+		// Check if the device adding this group is in any other group
+		for(auto it : groups)
+		{
+			if(it.second->ContainsDevice(target) && label != it.first)
+			{
+				it.second->RemoveDevice(target);
+			}
 		}
 	}
 	
@@ -181,7 +189,7 @@ namespace lifx {
 	
 	void Manager::AddGroupDevice(std::string groupName, MacAddress target)
 	{
-		AddGroup(groupName);
+		AddGroup(groupName, target);
 		groups[groupName]->AddDevice(target);
 	}
 	

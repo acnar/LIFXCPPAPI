@@ -20,18 +20,7 @@ class LIFXDevice {
 		saved_brightness = 0;
 		saved_power = 0;
 	}
-	#if 0
-	LIFXDevice(const std::string& n, const MacAddress& a, const uint16_t& p=0, const uint16_t& h=0, const uint16_t& s=0, const uint16_t& b=0, const uint16_t& k=0, const unsigned& d=0):
-		name(n), addr(a)
-	{
-		power = p;
-		hue = h;
-		saturation = s;
-		brightness = b;
-		kelvin = k;
-		last_discovered = d;
-	}
-	#endif
+	
 	bool Expired(unsigned currentTime)
 	{
 		return ((last_discovered + ExpiryTime) < currentTime);
@@ -52,16 +41,7 @@ class LIFXDevice {
 	const uint16_t& Brightness() const { return brightness; }
 	const uint16_t& Power() const { return power; }
 	const std::string& Name() const {return name;}
-#if 0
-	void SetAttributes(uint16_t h, uint16_t s, uint16_t b, uint16_t k, uint16_t p)
-	{
-		hue = h;
-		saturation = s;
-		brightness = b;
-		kelvin = k;
-		power = p;
-	}
-#endif
+
 	void SaveState()
 	{
 		saved_brightness = brightness;
@@ -91,7 +71,6 @@ class LIFXDevice {
 		ret << "\tBrightness: " << brightness << "\n";
 		ret << "\tKelvin: " << kelvin << "\n";
 		ret << "\tPower: " << power << "\n";
-		//printf("brightness in tostring %016p \n", (uintptr_t)&this->brightness);
 		return ret.str();
 	}
 protected:
@@ -111,6 +90,6 @@ protected:
 
 	uint32_t last_discovered;
 	
-	static const unsigned ExpiryTime = 30000;
+	static const unsigned ExpiryTime = 120000;
 };
 }

@@ -15,72 +15,72 @@
 #include "Packet.h"
 #include "Color.h"
 #include "Manager.h"
+#include "VLC.h"
+
+const std::string lifx_broadcast_ip = "255.255.255.255";
+const std::string control_group = "Living Room";
+const std::string vlc_ip = "192.168.0.230";
+const std::string vlc_auth = "OnZsY3Bhc3M=";
 
 std::mutex manager_mutex;
-using namespace lifx;
+int lightstate = 2;
 
-void discovery(Manager manager, bool *bgthread)
+using namespace lifx;
+        
+void discovery(Manager* manager, bool *bgthread)
 {
 	while(*bgthread)
 	{
 		manager_mutex.lock();
-		manager.Discover();
-		manager.PurgeOldDevices();
-		manager.ListGroups();
+		manager->Discover();
+		manager->PurgeOldDevices();
+		//manager->ListGroups();
 		manager_mutex.unlock();
 		std::this_thread::sleep_for (std::chrono::seconds(5));
 	}
 }
 
-int main(int argc, const char* argv[]) {
-    Manager manager("255.255.255.255");
-	bool bgthread = true;
-    manager.Initialize();
-	std::thread t1(discovery, manager, &bgthread);
-	
-    if (argc > 1) {
-        // set color and quit
-		uint16_t arg;
-        uint16_t hue, saturation, kelvin;
-		float brightness;
-		uint32_t fade_time;
-		sscanf(argv[1], "%hu", &arg);
-		while(1){
-		
-			if(arg == 1){
-				scanf("%hu %hu %f %hu %iu", &hue, &saturation, &brightness, &kelvin, &fade_time);
-				if(hue == 3)
-				{
-					break;
-				}
-				std::cout << hue << " " << saturation << " " << brightness << " " << kelvin << " " << fade_time << "\n";
-				manager.SetColor("Living Room", hue, saturation, brightness, kelvin, fade_time);
-				
-			} else if(arg == 2) {
-				scanf("%hu", &hue);
-				if(hue == 1)
-				{
-					manager_mutex.lock();
-					manager.LightsDown("Living Room", true);
-					manager_mutex.unlock();
-				}
-				else if(hue == 2) {
-					manager_mutex.lock();
-					manager.LightsRestore("Living Room");
-					manager_mutex.unlock();
-				} else if(hue == 3){
-					manager_mutex.lock();
-					manager.LightsUp("Living Room", true);
-					manager_mutex.unlock();
-				} else if(hue == 4) {
-					break;
-				}
-			} 
+void vlc_listener(VLC* vlc, Manager* manager)
+{
+    std::string playstate, fullscreen;
+    bool success;
+    
+    while(1){
+        success = vlc->GetState(playstate, fullscreen);
+        if(success) {
+            if(playstate == "playing" && fullscreen == "true" && lightstate != 1)
+            {
+                manager_mutex.lock();
+                manager->LightsDown(control_group, true);
+                manager_mutex.unlock();
+                lightstate = 1;
+            }
+            else if((playstate != "playing" || fullscreen != "true")  && lightstate == 1)
+            {
+                manager_mutex.lock();
+                manager->LightsRestore(control_group);
+                manager_mutex.unlock();
+                lightstate = 2;
+            }
         }
+        std::this_thread::sleep_for (std::chrono::seconds(1));
     }
+}
 
-	bgthread = false;
+int main(int argc, const char* argv[]) {
+    std::shared_ptr<Socket> http_socket;
+    Manager * manager = new Manager(lifx_broadcast_ip);
+    VLC* vlc = new VLC(vlc_ip, vlc_auth);
+    
+	bool bgthread = true;
+    
+	std::thread t1(discovery, manager, &bgthread);
+    std::thread t2(vlc_listener, vlc, manager);
+    
+    // todo - handle termination
+    
 	t1.join();
-	
+	t2.join();
+    
     return 0;
 }

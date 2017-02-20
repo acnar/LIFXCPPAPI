@@ -66,6 +66,18 @@ public:
 		}
 	}
 	
+	void RemoveDevice(const MacAddress& address)
+	{
+		std::map<std::string, LIFXDevice*>::iterator itr = devices.begin();
+		while (itr != devices.end()) {
+			if (itr->second->Address() == address) {
+			   itr = devices.erase(itr);
+			} else {
+			   ++itr;
+			}
+		}
+	}
+	
 	void SaveState()
 	{
 		for (auto& it: devices)
