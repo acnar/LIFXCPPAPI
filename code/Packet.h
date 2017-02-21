@@ -375,6 +375,11 @@ public:
 		return source;
 	}
     
+    const payload_t& GetPayload()
+    {
+        return payload;
+    }
+    
     void Initialize(uint16_t type, uint8_t t = 1, MacAddress addr = MacAddress(),uint32_t src = 0, uint8_t areq = 0) {
         packet_type = type;
         protocol = Protocol::Send;
@@ -383,6 +388,7 @@ public:
         size = sizeof(Packet) - sizeof(payload_t);
 		source = src;
 		ack_required = areq;
+        res_required = 0;
     }
 
 	

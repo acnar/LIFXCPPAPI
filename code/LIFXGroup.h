@@ -77,7 +77,7 @@ public:
 			}
 		}
 	}
-	
+#if 0	
 	void SaveState()
 	{
 		for (auto& it: devices)
@@ -85,7 +85,7 @@ public:
 			it.second->SaveState();
 		}
 	}
-	
+#endif	
 	std::string ToString() const {
         std::stringstream ret;
 		ret << "\nGroup: " << name << "\n";

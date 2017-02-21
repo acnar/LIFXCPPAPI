@@ -37,6 +37,7 @@ namespace lifx {
 	}
 	
 	void Manager::Send(Packet& packet) {
+        //std::cout << "TX " << packet.ToString() << "\n";
         socket->Send(packet);
     }
 	
@@ -57,22 +58,32 @@ namespace lifx {
 		}
     }
     
-    void Manager::SetColorAndPower(Packet& color, Packet& power, bool powerFirst, LIFXDevice* target, bool ack)
+    void Manager::SetColorAndPower(Packet& color, Payload::LightColorHSL& color_payload, 
+                                    Packet& power, Payload::SetPower& power_payload, 
+                                    LIFXDevice* target, bool ack, bool save)
     {
         uint32_t retries = 15;
+                
+        if(save)
+        {
+            if(target->SavedTime() < socket->GetTicks())
+            {
+                target->SaveState();
+            }
+        }
         
         while(retries > 0)
         {
             target->ClearPendingAcks();
             target->AddPendingAcks(2);
             
-            if(powerFirst)
+            if(power_payload.level != 0)
             {
                 /* Turn on the power first */
                 Send(power);
             }
             Send(color);
-            if(!powerFirst)
+            if(power_payload.level == 0)
             {
                 /* Turn off the power last */
                 Send(power);
@@ -80,7 +91,7 @@ namespace lifx {
         
             if(ack)
             {
-                WaitForPackets(target, LIFXDevice::HasPendingAcks, false, 5000);
+                WaitForPackets(target, LIFXDevice::HasPendingAcks, false, 200);
                 
                 if(!target->HasPendingAcks())
                 {
@@ -94,6 +105,7 @@ namespace lifx {
                 break;
             }
         }
+        target->SaveTime(socket->GetTicks() + color_payload.fade_time);
         
         if(retries == 0)
         {
@@ -130,14 +142,10 @@ namespace lifx {
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-					if(save)
-					{
-						it2->second->SaveState();
-					}
                     packet2.SetPower(sp, 0, it2->second->Address(),1);
                     packet.SetLightColorHSL(lc, 0, it2->second->Address(),1);
                     
-                    SetColorAndPower(packet, packet2, sp.level != 0, it2->second, 0);
+                    SetColorAndPower(packet, lc, packet2, sp, it2->second, 1, save);
 				}
 			}
 		}
@@ -169,7 +177,7 @@ namespace lifx {
 					packet2.SetPower(sp, 0, it2->second->Address(), 1);
 					packet.SetLightColorHSL(lc, 0, it2->second->Address(), 1);
 					
-                    SetColorAndPower(packet, packet2, sp.level != 0, it2->second, 0);
+                    SetColorAndPower(packet, lc, packet2, sp, it2->second, 1, false);
 				}
 			}
 		}
@@ -217,6 +225,7 @@ namespace lifx {
     void Manager::ReadPacket() {
         Packet packet;
         if (socket->Receive(packet)) {
+            //std::cout << "RX " << packet.ToString() << "\n";
 			lastRecvTime = socket->GetTicks();
 			HandleNewPacket(packet);
         }

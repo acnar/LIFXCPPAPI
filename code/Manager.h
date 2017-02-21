@@ -30,8 +30,9 @@ class Manager {
 		void AddGroupDevice(std::string groupName, MacAddress target);
         void SubtractGroupDeviceAck(const MacAddress& target);
         void WaitForPackets(LIFXDevice* device, LIFXDeviceFn terminator, bool condition, unsigned to);
-		void SetColorAndPower(Packet& color, Packet& power, bool powerFirst, LIFXDevice* target, bool ack);
-        
+		void SetColorAndPower(Packet& color, Payload::LightColorHSL& color_payload, 
+                                    Packet& power, Payload::SetPower& power_payload, 
+                                    LIFXDevice* target, bool ack, bool save);
 		std::shared_ptr<Socket> socket;
 		std::map<std::string, LIFXGroup*> groups;
 		unsigned lastRecvTime;
