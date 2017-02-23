@@ -17,6 +17,8 @@
 #include "Manager.h"
 #include "VLC.h"
 
+using namespace lifx;
+        
 const std::string lifx_broadcast_ip = "255.255.255.255";
 const std::string control_group = "Living Room";
 const std::string vlc_ip = "192.168.0.230";
@@ -24,12 +26,20 @@ const std::string vlc_auth = "OnZsY3Bhc3M=";
 
 std::mutex manager_mutex;
 int lightstate = 2;
+volatile bool done = false;
+Manager * manager;
 
-using namespace lifx;
-        
-void discovery(Manager* manager, bool *bgthread)
+void signal_callback_handler(int signum)
 {
-	while(*bgthread)
+    manager->WriteDevices("cache");
+    done = true;
+    
+    exit(signum);
+}
+    
+void discovery(Manager* manager)
+{
+	while(!done)
 	{
 		manager_mutex.lock();
 		manager->Discover();
@@ -44,7 +54,7 @@ void vlc_listener(VLC* vlc, Manager* manager)
     std::string playstate, fullscreen;
     bool success;
     
-    while(1){
+    while(!done){
         success = vlc->GetState(playstate, fullscreen);
         if(success) {
             if(playstate == "playing" && fullscreen == "true" && lightstate != 1)
@@ -68,17 +78,17 @@ void vlc_listener(VLC* vlc, Manager* manager)
 
 int main(int argc, const char* argv[]) {
     std::shared_ptr<Socket> http_socket;
-    Manager * manager = new Manager(lifx_broadcast_ip);
+    signal(SIGINT, signal_callback_handler);
+	 
+    manager = new Manager(lifx_broadcast_ip);
     VLC* vlc = new VLC(vlc_ip, vlc_auth);
     
-	bool bgthread = true;
-    
-	std::thread t1(discovery, manager, &bgthread);
+    manager->ReadDevices("cache");
+    manager->ListGroups();
+    std::thread t1(discovery, manager);
     std::thread t2(vlc_listener, vlc, manager);
-    
-    // todo - handle termination
-    
-	t1.join();
+	
+    t1.join();
 	t2.join();
     
     return 0;

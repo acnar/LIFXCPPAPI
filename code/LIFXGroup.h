@@ -18,6 +18,9 @@ public:
 		devices.clear();
 	}
 	
+    void Name(const std::string& n) { name = n; }
+    const std::string& Name() const {return name; }
+    
 	void AddDevice(const MacAddress& address)
 	{
 		std::string devName = GetDevice(address);
@@ -49,9 +52,9 @@ public:
 		return (devices.find(deviceKey) != devices.end());
 	}
 	
-	void SetDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered)
+	void SetDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, const bool& discovered)
 	{
-		devices[target.ToString()]->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered);
+		devices[target.ToString()]->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered, discovered);
 	}
 	
 	void PurgeOldDevices(unsigned currentTime)
@@ -77,15 +80,52 @@ public:
 			}
 		}
 	}
-#if 0	
-	void SaveState()
-	{
-		for (auto& it: devices)
+    
+    void RefreshTimestamps(unsigned time)
+    {
+        for(auto& it : devices)
+        {
+            it.second->Timestamp(time);
+        }
+    }
+
+    void AddDevice(LIFXDevice* device)
+    {
+        std::string label = device->Address().ToString();
+        if(devices.find(label) == devices.end())
 		{
-			it.second->SaveState();
+			devices[label] = device;
 		}
-	}
-#endif	
+    }
+    
+    bool DiscoveryDone()
+    {
+        bool done = true;
+        for(const auto& it: devices)
+        {
+            if(it.second->Discovered() == false)
+            {
+                done = false;
+                break;
+            }
+        }
+        return done;
+    }
+    
+    bool HasGlobalSetting(const LIFXDeviceState& state)
+    {
+        bool has = true;
+        for(const auto& it: devices)
+        {
+            if(*it.second->State() != state)
+            {
+                has = false;
+                break;
+            }
+        }
+        return has;
+    }
+    
 	std::string ToString() const {
         std::stringstream ret;
 		ret << "\nGroup: " << name << "\n";
@@ -102,4 +142,45 @@ protected:
 	
 	std::string name;
 };
+
+    inline std::istream& operator>>(std::istream& is, LIFXGroup* group)
+    {
+        LIFXDevice* device;
+        std::string line;
+        int num_devs;
+        int dev = 0;
+        if(is)
+        {
+            getline(is, line);
+            if(line != "")
+            {
+                group->Name(line);
+            }
+        }
+        if(is)
+        {
+            getline(is, line);
+            num_devs = std::stoi(line);
+        }
+        while(is && (dev < num_devs))
+        {
+            device = new LIFXDevice();
+            is >> device;
+            group->AddDevice(device);
+            dev++;
+        }
+        
+        return is;
+    }
+
+    inline std::ostream& operator<<(std::ostream& os, LIFXGroup* group)
+    {
+        os << group->Name() << std::endl;
+        os << group->devices.size() << std::endl;
+        for(const auto& it: group->devices)
+        {
+            os << it.second;
+        }
+        return os;
+    }
 }

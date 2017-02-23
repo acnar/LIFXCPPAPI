@@ -32,8 +32,10 @@ namespace lifx {
         }
         
         if(thisprint != lastprint)
+        {
             std::cout << thisprint;
             lastprint = thisprint;
+        }
 	}
 	
 	void Manager::Send(Packet& packet) {
@@ -113,6 +115,38 @@ namespace lifx {
         }
     }
     
+    void Manager::ReadDevices(const std::string& fname) {
+        std::ifstream file(fname);
+        std::string name;
+        LIFXGroup* group;
+         
+        while(file)
+        {
+            group = new LIFXGroup();
+            file >> group;
+            if(group->Name() != "Unnamed Group")
+            {
+                group->RefreshTimestamps(socket->GetTicks());
+                AddGroup(group);
+            }
+            else
+            {
+                free(group);
+            }
+        }
+        file.close();
+    }
+
+    void Manager::WriteDevices(const std::string& fname) {
+        std::ofstream file(fname);
+        for (const auto& it : groups) {
+            if (it.first.length() > 0) {
+                file << it.second;
+            }
+        }
+        file.close();
+    }
+    
 	void Manager::SetColor(std::string group, uint16_t hue, uint16_t saturation, float brightness, uint16_t kelvin, uint32_t fade_time, bool save) {
         Packet packet;
 		Packet packet2;
@@ -183,6 +217,11 @@ namespace lifx {
 		}
     }
 	
+    bool Manager::DiscoveryDone(const std::string& group)
+    {
+        return groups[group]->DiscoveryDone();
+    }
+    
 	void Manager::LightsRestore(std::string group) {
 		RestoreColor(group, 10000);
 	}
@@ -192,7 +231,16 @@ namespace lifx {
 	}
 	
 	void Manager::LightsDown(std::string group, bool save) {
-		SetColor(group, 0, 0, 20, 2500, 10000, save);
+        LIFXDeviceState dimState = LIFXDeviceState(0, 0, 13107, 2500, 0xffff, 0);
+        if(!DiscoveryDone(group))
+        {
+            return;
+        }
+        if(!groups[group]->HasGlobalSetting(dimState))
+        {
+            std::cout << "Dimming lights\n";
+            SetColor(group, 0, 0, 20, 2500, 10000, save);
+        }
 	}
 
     void Manager::Discover() {
@@ -231,17 +279,26 @@ namespace lifx {
         }
     }
 	
-	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered)
+	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, bool discovered)
 	{
 		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->second->ContainsDevice(target))
 			{
-				it->second->SetDeviceAttributes(target, label, hue, saturation, brightness, kelvin, power, last_discovered);
+				it->second->SetDeviceAttributes(target, label, hue, saturation, brightness, kelvin, power, last_discovered, discovered);
 			}
 		}
 	}
 
+    void Manager::AddGroup(LIFXGroup* group)
+    {
+        std::string label = group->Name();
+        if(groups.find(label) == groups.end())
+		{
+			groups[label] = group;
+		}
+    }
+    
     void Manager::AddGroup(const std::string& label, const MacAddress& target)
 	{
 		if(groups.find(label) == groups.end())
@@ -295,7 +352,7 @@ namespace lifx {
         } else if (packet.GetType() == PacketType::LightStatus) {
 			Payload::LightStatus state = packet.GetLightStatus();
 			MacAddress target = packet.GetTargetMac();
-			SetGroupDeviceAttributes(target, state.label, state.hue, state.saturation, state.brightness, state.kelvin, state.power, socket->GetTicks());
+			SetGroupDeviceAttributes(target, state.label, state.hue, state.saturation, state.brightness, state.kelvin, state.power, socket->GetTicks(), true);
 		} else if (packet.GetType() == PacketType::Acknowledgement){
             MacAddress target = packet.GetTargetMac();
             SubtractGroupDeviceAck(target);
