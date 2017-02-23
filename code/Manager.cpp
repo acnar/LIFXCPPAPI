@@ -60,10 +60,31 @@ namespace lifx {
 		}
     }
     
-    void Manager::SetColorAndPower(Packet& color, Payload::LightColorHSL& color_payload, 
-                                    Packet& power, Payload::SetPower& power_payload, 
-                                    LIFXDevice* target, bool ack, bool save)
+    void Manager::SetColorAndPower(LIFXDevice* target, bool ack, bool save, const LIFXDeviceState* state, uint32_t fade_time)
     {
+        Packet color;
+		Packet power;
+
+        Payload::LightColorHSL color_payload;
+		Payload::SetPower power_payload;
+        
+		if(state->brightness == 0)
+		{
+			power_payload.level = 0;
+		}
+		else
+		{
+			power_payload.level = state->power;
+		}
+        power_payload.duration = fade_time;
+        color_payload.Initialize();
+        color_payload.hue = state->hue;
+        color_payload.saturation = state->saturation;
+        color_payload.brightness = state->brightness;
+		color_payload.kelvin = state->kelvin;
+        color_payload.fade_time = fade_time;
+        power.SetPower(power_payload, 0, target->Address(),1);
+        color.SetLightColorHSL(color_payload, 0, target->Address(),1);
         uint32_t retries = 15;
                 
         if(save)
@@ -107,6 +128,7 @@ namespace lifx {
                 break;
             }
         }
+        
         target->SaveTime(socket->GetTicks() + color_payload.fade_time);
         
         if(retries == 0)
@@ -146,76 +168,6 @@ namespace lifx {
         }
         file.close();
     }
-    
-	void Manager::SetColor(std::string group, uint16_t hue, uint16_t saturation, float brightness, uint16_t kelvin, uint32_t fade_time, bool save) {
-        Packet packet;
-		Packet packet2;
-
-        Payload::LightColorHSL lc;
-		Payload::SetPower sp;
-        
-		if(brightness == 0)
-		{
-			sp.level = 0;
-		}
-		else
-		{
-			sp.level = 0xffff;
-		}
-        sp.duration = fade_time;
-        lc.Initialize();
-        lc.hue = hue;
-        lc.saturation = saturation;
-        lc.brightness = ((brightness / 100.0) * 0xffff);
-		lc.kelvin = kelvin;
-        lc.fade_time = fade_time;
-
-		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
-		{
-			if(it->first == group)
-			{
-				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
-				{
-                    packet2.SetPower(sp, 0, it2->second->Address(),1);
-                    packet.SetLightColorHSL(lc, 0, it2->second->Address(),1);
-                    
-                    SetColorAndPower(packet, lc, packet2, sp, it2->second, 1, save);
-				}
-			}
-		}
-    }
-    
-	void Manager::RestoreColor(std::string group, uint32_t fade_time) {
-        Packet packet;
-		Packet packet2;
-
-        Payload::LightColorHSL lc;
-		Payload::SetPower sp;
-		sp.Initialize();
-        lc.Initialize();
-		
-		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
-		{
-			if(it->first == group)
-			{
-				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
-				{
-					sp.level = it2->second->SavedPower();
-                    sp.duration = fade_time;
-					lc.hue = it2->second->SavedHue();
-					lc.saturation = it2->second->SavedSaturation();
-					lc.brightness = it2->second->SavedBrightness();
-					lc.kelvin = it2->second->SavedKelvin();
-					lc.fade_time = fade_time;
-		
-					packet2.SetPower(sp, 0, it2->second->Address(), 1);
-					packet.SetLightColorHSL(lc, 0, it2->second->Address(), 1);
-					
-                    SetColorAndPower(packet, lc, packet2, sp, it2->second, 1, false);
-				}
-			}
-		}
-    }
 	
     bool Manager::DiscoveryDone(const std::string& group)
     {
@@ -223,24 +175,49 @@ namespace lifx {
     }
     
 	void Manager::LightsRestore(std::string group) {
-		RestoreColor(group, 10000);
-	}
-	
-	void Manager::LightsUp(std::string group, bool save) {
-		SetColor(group, 0, 0, 100, 5500, 10000, save);
+        
+		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		{
+			if(it->first == group)
+			{
+				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
+				{
+					
+                    SetColorAndPower(it2->second, 1, false, 
+                                     it2->second->SavedState(),
+                                     10000);
+				}
+			}
+		}
 	}
 	
 	void Manager::LightsDown(std::string group, bool save) {
+        
         LIFXDeviceState dimState = LIFXDeviceState(0, 0, 13107, 2500, 0xffff, 0);
+        
         if(!DiscoveryDone(group))
         {
             return;
         }
-        if(!groups[group]->HasGlobalSetting(dimState))
-        {
-            std::cout << "Dimming lights\n";
-            SetColor(group, 0, 0, 20, 2500, 10000, save);
-        }
+       
+        for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
+		{
+			if(it->first == group)
+			{
+				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
+				{
+                    dimState.brightness = 13107;
+                    if(it2->second->Power() >= dimState.power)
+                    {
+                        if(it2->second->Brightness() < dimState.brightness)
+                        {
+                            dimState.brightness = it2->second->Brightness();
+                        }
+                        SetColorAndPower(it2->second, true, false, &dimState, 10000);
+                    }
+				}
+			}
+		}
 	}
 
     void Manager::Discover() {

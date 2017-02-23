@@ -41,11 +41,6 @@ public:
     
     bool operator!=(const LIFXDeviceState& other)
     {
-        std::cout << hue << " " << other.hue << "\n";
-        std::cout << saturation << " " << other.saturation << "\n";
-        std::cout << brightness << " " << other.brightness << "\n";
-        std::cout << kelvin << " " << other.kelvin << "\n";
-        std::cout << power << " " << other.power << "\n";
         if((hue != other.hue) ||
             (saturation != other.saturation) ||
             (brightness != other.brightness) ||
@@ -53,6 +48,23 @@ public:
             (power != other.power))
         {
             return true;
+        }
+        
+        return false;
+    }
+   
+    bool operator>=(const LIFXDeviceState& other)
+    {
+        if(power > other.power)
+        {
+            return true;
+        }
+        else if(power == other.power)
+        {
+            if(brightness >= other.brightness)
+            {
+                return true;
+            }
         }
         
         return false;
