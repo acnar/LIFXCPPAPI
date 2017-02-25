@@ -5,6 +5,42 @@
 
 namespace lifx {
  
+class Config {
+    public:
+    Config()
+    {
+        hue = 0;
+        saturation = 0;
+        brightness = 0;
+        kelvin = 0;
+        power = 0;
+        fade_time = 0;
+        restore_time = 0;
+    }
+    
+    std::string ToString() const
+    {
+        std::stringstream ret;
+		ret << "Hue: " << hue << "\n";
+		ret << "Saturation: " << saturation << "\n";
+        ret << "Brightness: " << brightness << "\n";
+        ret << "Kelvin: " << kelvin << "\n";
+        ret << "Power: " << power << "\n";
+        ret << "Fade Time: " << fade_time << "\n";
+        ret << "Restore Time: " << restore_time << "\n";
+		return ret.str();
+    }
+    
+    uint16_t hue;
+    uint16_t saturation;
+    uint16_t brightness;
+    uint16_t kelvin;
+    uint16_t power;
+    uint32_t fade_time;
+    uint32_t restore_time;
+    
+};
+
 class Manager {
 	private:
 		
@@ -22,7 +58,7 @@ class Manager {
 		void Broadcast(Packet& packet);
 		void SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, bool discovered);
 		void LightsRestore(std::string group);
-		void LightsDown(std::string group, bool save);
+		bool LightsDown(std::string group, bool save);
 		void AddGroup(const std::string& label, const MacAddress& address);
         void AddGroup(LIFXGroup* group);
 		void AddGroupDevice(std::string groupName, MacAddress target);
@@ -32,11 +68,14 @@ class Manager {
         void ReadDevices(const std::string& fname);
         void WriteDevices(const std::string& fname);
         bool DiscoveryDone(const std::string& group);
+        void ReadConfig();
         
 		std::shared_ptr<Socket> socket;
 		std::map<std::string, LIFXGroup*> groups;
+        std::map<std::string, Config*> configs;
 		unsigned lastRecvTime;
 		std::string lastprint;
 		static const unsigned timeout = 1000;
+        std::string activeConfigName;
 };
 }

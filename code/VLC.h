@@ -8,8 +8,15 @@ class VLC {
 	
 	VLC(const std::string& ip, const std::string b64AuthString)
 	{
-		socket = std::shared_ptr < Socket
+        try
+        {
+            socket = std::shared_ptr < Socket
                 > (Socket::CreateStream(ip));
+        }
+        catch(int e)
+        {
+            std::cout << "Could not connect to VLC\n";
+        }
         authString = b64AuthString;
 	}
 	

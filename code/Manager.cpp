@@ -76,6 +76,7 @@ namespace lifx {
 		{
 			power_payload.level = state->power;
 		}
+        
         power_payload.duration = fade_time;
         color_payload.Initialize();
         color_payload.hue = state->hue;
@@ -159,6 +160,61 @@ namespace lifx {
         file.close();
     }
 
+    void Manager::ReadConfig()
+    {
+        std::ifstream file("config");
+        std::string line;
+        Config* config;
+        
+        while(file)
+        {
+            getline(file, line);
+            if(line[0] == 'N')
+            {
+                config = new Config();
+                configs[line.substr(3,-1)] = config;
+            }
+            if(line[0] == 'H')
+            {
+                config->hue = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'S')
+            {
+                config->saturation = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'B')
+            {
+                config->brightness = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'K')
+            {
+                config->kelvin = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'P')
+            {
+                config->power = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'F')
+            {
+                config->fade_time = std::stoi(line.substr(3,-1));
+            }
+            if(line[0] == 'R')
+            {
+                config->restore_time = std::stoi(line.substr(3,-1));
+            }
+        }
+        
+        file.close();
+        
+        for(auto it : configs)
+        {
+            std::cout << it.first << "\n";
+            std::cout << it.second->ToString() << "\n";
+        }
+        
+        activeConfigName = configs.begin()->first;
+    }
+    
     void Manager::WriteDevices(const std::string& fname) {
         std::ofstream file(fname);
         for (const auto& it : groups) {
@@ -182,42 +238,48 @@ namespace lifx {
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-					
-                    SetColorAndPower(it2->second, 1, false, 
+                    SetColorAndPower(it2->second, true, false, 
                                      it2->second->SavedState(),
-                                     10000);
+                                     configs[activeConfigName]->restore_time);
 				}
 			}
 		}
 	}
 	
-	void Manager::LightsDown(std::string group, bool save) {
+	bool Manager::LightsDown(std::string group, bool save) {
         
-        LIFXDeviceState dimState = LIFXDeviceState(0, 0, 13107, 2500, 0xffff, 0);
+        LIFXDeviceState dimState = LIFXDeviceState(configs[activeConfigName]->hue, 
+                                                    configs[activeConfigName]->saturation, 
+                                                    configs[activeConfigName]->brightness, 
+                                                    configs[activeConfigName]->kelvin, 
+                                                    configs[activeConfigName]->power, 
+                                                    0);
         
         if(!DiscoveryDone(group))
         {
-            return;
+            return false;
         }
-       
+        
         for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-                    dimState.brightness = 13107;
+                    dimState.brightness = configs[activeConfigName]->brightness;
                     if(it2->second->Power() >= dimState.power)
                     {
                         if(it2->second->Brightness() < dimState.brightness)
                         {
                             dimState.brightness = it2->second->Brightness();
                         }
-                        SetColorAndPower(it2->second, true, false, &dimState, 10000);
+                        SetColorAndPower(it2->second, true, true, &dimState,  configs[activeConfigName]->fade_time);
                     }
 				}
 			}
 		}
+        
+        return true;
 	}
 
     void Manager::Discover() {

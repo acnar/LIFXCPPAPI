@@ -26,6 +26,18 @@ public:
         timestamp = t;
     }
     
+    std::string ToString() const
+    {
+        std::stringstream ret;
+		ret << "Hue: " << hue << "\n";
+		ret << "Saturation: " << saturation << "\n";
+        ret << "Brightness: " << brightness << "\n";
+        ret << "Kelvin: " << kelvin << "\n";
+        ret << "Power: " << power << "\n";
+        ret << "Time: " << timestamp << "\n";
+		return ret.str();
+    }
+    
     LIFXDeviceState& operator=(const LIFXDeviceState& other)
     {
         LIFXDeviceState state;
@@ -146,7 +158,7 @@ class LIFXDevice {
     
 	void SaveState()
 	{
-        savedState = state;
+        *savedState = *state;
 	}
     
     void SaveTime(unsigned timestamp)

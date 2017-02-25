@@ -59,10 +59,14 @@ void vlc_listener(VLC* vlc, Manager* manager)
         if(success) {
             if(playstate == "playing" && fullscreen == "true" && lightstate != 1)
             {
+                bool set = false;
                 manager_mutex.lock();
-                manager->LightsDown(control_group, true);
+                set = manager->LightsDown(control_group, true);
                 manager_mutex.unlock();
-                lightstate = 1;
+                if(set)
+                {
+                    lightstate = 1;
+                }
             }
             else if((playstate != "playing" || fullscreen != "true")  && lightstate == 1)
             {
@@ -82,9 +86,15 @@ int main(int argc, const char* argv[]) {
 	 
     manager = new Manager(lifx_broadcast_ip);
     VLC* vlc = new VLC(vlc_ip, vlc_auth);
+    LIFXDeviceState state = LIFXDeviceState(0, 0, 65535, 5500, 65535, 0);
+    
     
     manager->ReadDevices("cache");
-    manager->ListGroups();
+    for(auto it : manager->groups.begin()->second->devices)
+    {
+        manager->SetColorAndPower(it.second, false, false, &state, 0);
+    }
+    manager->ReadConfig();
     std::thread t1(discovery, manager);
     std::thread t2(vlc_listener, vlc, manager);
 	
