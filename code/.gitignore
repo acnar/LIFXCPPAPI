@@ -1,3 +1,7 @@
 *.o
 *.project
 *.mk
+LIFXAPP.*
+Debug
+Release
+.vs

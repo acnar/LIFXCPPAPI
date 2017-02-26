@@ -8,6 +8,7 @@ class VLC {
 	
 	VLC(const std::string& ip, const std::string b64AuthString)
 	{
+		addr = ip;
         try
         {
             socket = std::shared_ptr < Socket
@@ -15,9 +16,15 @@ class VLC {
         }
         catch(int e)
         {
-            std::cout << "Could not connect to VLC\n";
+            std::cout << "Could not connect to VLC \n";
         }
         authString = b64AuthString;
+	}
+
+	void RetryConnect()
+	{
+		socket = std::shared_ptr < Socket
+			>(Socket::CreateStream(addr));
 	}
 	
     void HTTPPost()
@@ -31,9 +38,26 @@ class VLC {
         }
         message = "POST /requests/status.xml HTTP/1.1\r\n" + auth + "\r\n";
         
-        socket->Send(message);
+		try 
+		{
+			socket->Send(message);
+		}
+		catch (int e)
+		{
+		}
+        
     }
     
+	const bool& Connected()
+	{
+		return connected;
+	}
+
+	void Close()
+	{
+		socket->Close();
+	}
+
 	bool GetState(std::string& playstate, std::string& fullscreen)
     {
         int attempts = 0;
@@ -45,7 +69,13 @@ class VLC {
 
         while(attempts < 3)
         {
-            recvstring = socket->Receive(4096);
+			try
+			{
+				recvstring = socket->Receive(4096);
+			}
+			catch (int e)
+			{
+			}
             fs_start = recvstring.find("<fullscreen>");
             if(fs_start > 0)
             {
@@ -71,5 +101,7 @@ class VLC {
 private:
 	std::shared_ptr<Socket> socket;
     std::string authString;
+	std::string addr;
+	bool connected = false;
 };
 }

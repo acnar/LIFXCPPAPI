@@ -1,3 +1,4 @@
+#ifndef WIN32
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -18,22 +19,23 @@ class UnixSocket: public Socket {
 public:
     UnixSocket(const std::string& ip, uint16_t port, bool broadcast) {
         int ret;
+
         if (!broadcast) {
-            base_url = "http://" + ip + ":" + std::to_string(port) + "/";
-            write_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            memset(&write_addr, 0, sizeof(write_addr));
-            write_addr.sin_family = AF_INET;
-            inet_aton(ip.c_str(), &write_addr.sin_addr);
-            write_addr.sin_port = htons(port);
+			write_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			assert(write_sock >= 0);
+			memset(&write_addr, 0, sizeof(write_addr));
+			write_addr.sin_family = AF_INET;
+			inet_aton(ip.c_str(), &write_addr.sin_addr);
+			write_addr.sin_port = htons(port);
             ret = connect(write_sock, (sockaddr *) &write_addr, sizeof(write_addr));
             assert(ret == 0);
         } else {
-            write_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-            assert(write_sock >= 0);
-            memset(&write_addr, 0, sizeof(write_addr));
-            write_addr.sin_family = AF_INET;
-            inet_aton(ip.c_str(), &write_addr.sin_addr);
-            write_addr.sin_port = htons(port);
+			write_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+			assert(write_sock >= 0);
+			memset(&write_addr, 0, sizeof(write_addr));
+			write_addr.sin_family = AF_INET;
+			inet_aton(ip.c_str(), &write_addr.sin_addr);
+			write_addr.sin_port = htons(port);
             int broadcastEnable = 1;
             ret = setsockopt(write_sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable,
                     sizeof(broadcastEnable));
@@ -61,6 +63,10 @@ public:
         
         do {
             bytes = write(write_sock,message.c_str(),message.length());
+			if (bytes < 0)
+			{
+				throw;
+			}
             message = message.substr(bytes, message.length());
             if (bytes < 0)
                 perror("ERROR writing message to socket.\n");
@@ -73,8 +79,9 @@ public:
     std::string Receive(int bytes)
     {
         std::string output(bytes, 0);
-        if (read(write_sock, &output[0], bytes-1)<0) {
-            perror("Failed to read data from socket.\n");
+        if (read(write_sock, &output[0], bytes-1) < 0) 
+		{
+			throw;
         }
         return output;
     }   
@@ -103,8 +110,13 @@ public:
         return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
     }
 
+	void Close()
+	{
+		close(write_sock);
+		close(read_sock);
+	}
+
 protected:
-    std::string base_url;
     int write_sock, read_sock;
     struct sockaddr_in write_addr;
     struct sockaddr_in read_addr;
@@ -118,3 +130,4 @@ Socket* Socket::CreateStream(const std::string& ip, uint16_t port) {
     return new UnixSocket(ip, port, false);
 }
 }
+#endif

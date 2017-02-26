@@ -22,6 +22,10 @@ namespace lifx {
         socket = std::shared_ptr < Socket
                 > (Socket::CreateBroadcast(broadcastIP));
         groups.clear();
+		activeConfigName = "";
+		controlGroup = "";
+		lightsStartOn = 0;
+
     }
     
     void Manager::ListGroups(void)
@@ -115,7 +119,7 @@ namespace lifx {
         
             if(ack)
             {
-                WaitForPackets(target, LIFXDevice::HasPendingAcks, false, 200);
+                WaitForPackets(target, &LIFXDevice::HasPendingAcks, false, 200);
                 
                 if(!target->HasPendingAcks())
                 {
@@ -160,6 +164,15 @@ namespace lifx {
         file.close();
     }
 
+	std::string Manager::StripNewline(std::string str)
+	{
+		if (str[str.length()-1] == '\n' || str[str.length()-1] == '\r')
+		{
+			return str.substr(0, str.length()-1);
+		}
+		return str;
+	}
+
     void Manager::ReadConfig()
     {
         std::ifstream file("config");
@@ -172,7 +185,8 @@ namespace lifx {
             if(line[0] == 'N')
             {
                 config = new Config();
-                configs[line.substr(3,-1)] = config;
+				std::string name = StripNewline(line.substr(3, -1));
+                configs[name] = config;
             }
             if(line[0] == 'H')
             {
@@ -196,23 +210,49 @@ namespace lifx {
             }
             if(line[0] == 'F')
             {
-                config->fade_time = std::stoi(line.substr(3,-1));
+                config->fade_time = std::stoi(line.substr(4,-1));
             }
             if(line[0] == 'R')
             {
-                config->restore_time = std::stoi(line.substr(3,-1));
+                config->restore_time = std::stoi(line.substr(4,-1));
             }
+			if (line[0] == 'I')
+			{
+				vlcIP = StripNewline(line.substr(4, -1));
+			}
+			if (line[0] == 'G')
+			{
+				controlGroup = StripNewline(line.substr(3, -1));
+			}
+			if (line[0] == 'D')
+			{
+				activeConfigName = StripNewline(line.substr(3, -1));
+			}
+			if (line[0] == 'V' && line[1] == 'U')
+			{
+				vlcUname = StripNewline(line.substr(4, -1));
+			}
+			if (line[0] == 'V' && line[1] == 'P')
+			{
+				vlcPass = StripNewline(line.substr(4, -1));
+			}
+			if (line[0] == 'L')
+			{
+				lightsStartOn = std::stoi(line.substr(3, -1));
+			}
         }
         
         file.close();
         
         for(auto it : configs)
         {
+			if (activeConfigName == "")
+			{
+				activeConfigName = it.first;
+			}
             std::cout << it.first << "\n";
             std::cout << it.second->ToString() << "\n";
         }
-        
-        activeConfigName = configs.begin()->first;
     }
     
     void Manager::WriteDevices(const std::string& fname) {
@@ -227,7 +267,14 @@ namespace lifx {
 	
     bool Manager::DiscoveryDone(const std::string& group)
     {
-        return groups[group]->DiscoveryDone();
+		if (!groups.empty())
+		{
+			return groups[group]->DiscoveryDone();
+		}
+		else
+		{
+			return false;
+		}
     }
     
 	void Manager::LightsRestore(std::string group) {
@@ -247,19 +294,19 @@ namespace lifx {
 	}
 	
 	bool Manager::LightsDown(std::string group, bool save) {
-        
+		
         LIFXDeviceState dimState = LIFXDeviceState(configs[activeConfigName]->hue, 
                                                     configs[activeConfigName]->saturation, 
                                                     configs[activeConfigName]->brightness, 
                                                     configs[activeConfigName]->kelvin, 
                                                     configs[activeConfigName]->power, 
                                                     0);
-        
+
         if(!DiscoveryDone(group))
         {
             return false;
         }
-        
+
         for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
@@ -267,14 +314,18 @@ namespace lifx {
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
                     dimState.brightness = configs[activeConfigName]->brightness;
-                    if(it2->second->Power() >= dimState.power)
-                    {
-                        if(it2->second->Brightness() < dimState.brightness)
-                        {
-                            dimState.brightness = it2->second->Brightness();
-                        }
-                        SetColorAndPower(it2->second, true, true, &dimState,  configs[activeConfigName]->fade_time);
-                    }
+					if ((it2->second->Power() != 0) || (dimState.power != 0))
+					{
+						if ((it2->second->Power() >= dimState.power))
+						{
+							if (it2->second->Brightness() < dimState.brightness)
+							{
+								dimState.brightness = it2->second->Brightness();
+							}
+
+							SetColorAndPower(it2->second, true, true, &dimState, configs[activeConfigName]->fade_time);
+						}
+					}
 				}
 			}
 		}
@@ -317,6 +368,10 @@ namespace lifx {
 			HandleNewPacket(packet);
         }
     }
+
+	void Manager::Close() {
+		socket->Close();
+	}
 	
 	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, bool discovered)
 	{
@@ -378,7 +433,7 @@ namespace lifx {
             Payload::StateService state = packet.GetStateService();
             if (state.service == (int) Payload::StateService::Service::UDP) {
 			    Packet p;
-			    p.Initialize(PacketType::GetGroup, 0, packet.GetTargetMac());
+			    p.Initialize(PacketType::GetGroup, 0, packet.GetTargetMac(), 0, 1);
 				Send(p);
             }
         } else if (packet.GetType() == PacketType::StateGroup) {
@@ -386,7 +441,7 @@ namespace lifx {
 			std::string label = (std::string)packet.GetStateGroup().label;
 			MacAddress target = packet.GetTargetMac();
 			AddGroupDevice(label, target);
-			p.Initialize(PacketType::GetLightState, 0, target);
+			p.Initialize(PacketType::GetLightState, 0, target, 0, 1);
 			Send(p);
         } else if (packet.GetType() == PacketType::LightStatus) {
 			Payload::LightStatus state = packet.GetLightStatus();

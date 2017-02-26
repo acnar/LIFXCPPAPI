@@ -49,8 +49,7 @@ class Manager {
 		
 	public:
         typedef  bool (LIFXDevice::*LIFXDeviceFn)(void); 
-	    Manager(const std::string& broadcastIP);
-		void Initialize();
+		Manager(const std::string& broadcastIP);
 		void Discover();
 		void ListGroups();
 		void PurgeOldDevices();
@@ -68,7 +67,9 @@ class Manager {
         void ReadDevices(const std::string& fname);
         void WriteDevices(const std::string& fname);
         bool DiscoveryDone(const std::string& group);
+		std::string StripNewline(std::string str);
         void ReadConfig();
+		void Close();
         
 		std::shared_ptr<Socket> socket;
 		std::map<std::string, LIFXGroup*> groups;
@@ -77,5 +78,10 @@ class Manager {
 		std::string lastprint;
 		static const unsigned timeout = 1000;
         std::string activeConfigName;
+		std::string controlGroup;
+		std::string vlcIP;
+		std::string vlcUname;
+		std::string vlcPass;
+		int lightsStartOn;
 };
 }

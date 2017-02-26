@@ -13,74 +13,129 @@ namespace lifx {
 	class Winsock : public Socket {
 	public:
 		Winsock(const std::string& ip, uint16_t port, bool broadcast) {
-			WSADATA wsaData;
-
-			assert( WSAStartup( MAKEWORD(2, 2), &wsaData ) == NO_ERROR );
+			int result;
+			if (!WinsockInitialized())
+			{
+				WSADATA wsaData;
+				if (WSAStartup(MAKEWORD(2, 2), &wsaData) != NO_ERROR)
+				{
+					perror("WSAStartup failed!\n");
+				}
+			}
+			
 			if (broadcast) {
-				assert ((socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != INVALID_SOCKET);
+				socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 			} else {
-				assert ((socket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) != INVALID_SOCKET);
+				socket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			}
+			if (socket_ == INVALID_SOCKET)
+			{
+				perror("Socket initialization failed!\n");
 			}
 
+			memset(&from, 0, sizeof(from));
 			from.sin_family = AF_INET;
-			from.sin_addr.s_addr = inet_addr("0.0.0.0");
+			from.sin_addr.s_addr = INADDR_ANY;
 			from.sin_port = htons(port);
 
-			assert(bind(socket_, (SOCKADDR*) &from, sizeof(from)) != SOCKET_ERROR);
-
+			memset(&dest, 0, sizeof(dest));
 			dest.sin_family = AF_INET;
-			dest.sin_addr.s_addr = inet_addr( ip.c_str() );
-			dest.sin_port = htons( port );
+			dest.sin_addr.S_un.S_addr = inet_addr(ip.c_str());
+			dest.sin_port = htons(port);
 
-			if (!broadcast) {  
-				assert(connect(socket_ ,(sockaddr*)&dest,sizeof(dest)) == 0);
+			u_long nonblock = 1;
+			ioctlsocket(socket_, FIONBIO, &nonblock);
+
+			if (broadcast)
+			{
+				const char * broadcastEnable = "1";
+				setsockopt(socket_, SOL_SOCKET, SO_BROADCAST, broadcastEnable,
+					sizeof(broadcastEnable));
+
+				result = bind(socket_, (SOCKADDR*)&from, sizeof(from));
+				if (result == SOCKET_ERROR)
+				{
+					perror("Socket bind failed\n");
+				}
+			} 
+			else
+			{  
+				int v = connect(socket_, (sockaddr*)&dest, sizeof(dest));
+				if (v != 0)
+				{
+					// expected to hit this case with non blocking socket since
+					// connecting may take some time.
+				}
 			}
+
+		}
+
+		bool WinsockInitialized()
+		{
+			SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (s == INVALID_SOCKET && WSAGetLastError() == WSANOTINITIALISED) {
+				return false;
+			}
+
+			closesocket(s);
+			return true;
 		}
 
         void Send(const std::string& data) {
-            int bytes;
-            std::string message = std::string(data);
-            
-            do {
-                bytes = write(_socket,message.c_str(),message.length());
-                message = message.substr(bytes, message.length());
-                if (bytes < 0)
-                    perror("ERROR writing message to socket.\n");
-                if (bytes == 0)
-                    break;
-            } while (message.length() > 0);
-
-        }
+            int sent;
+            const char * message = data.c_str();
+			int message_len = strlen(message);
+           
+			if (send(socket_, message, message_len, 0) <= 0)
+			{
+				throw 0;
+			}
+		}
         
         std::string Receive(int bytes)
         {
             std::string output(bytes, 0);
-            if (read(_socket, &output[0], bytes-1)<0) {
-                perror("Failed to read data from socket.\n");
-            }
+			if (recv(socket_, &output[0], bytes - 1, 0) <= 0)
+			{
+				throw 0;
+			}
             return output;
         }   
     
 		void Send(const Packet& packet) {
 			int sent = sendto(socket_,(const char*) &packet , packet.GetSize(), 0, (SOCKADDR*) &dest, sizeof(dest));
 			if (sent != packet.GetSize()) {
-				std::cerr << WSAGetLastError() << "\n";
+				std::cerr << WSAGetLastError() << " " << sent << " - UDP send error\n";
 			}
 			assert(sent == packet.GetSize());
 		}
 
 		bool Receive(Packet& packet) {
-			unsigned long nBytesAvailable;
-			if ( ioctlsocket(socket_, FIONREAD, &nBytesAvailable) != SOCKET_ERROR )
-			{
-				if (nBytesAvailable == 0) {
-					return false;
-				}
-			}
+			//unsigned long nBytesAvailable;
+			//if ( ioctlsocket(socket_, FIONREAD, &nBytesAvailable) != SOCKET_ERROR )
+			//{
+			//	if (nBytesAvailable == 0) {
+			//		return false;
+			//	}
+			//}
+			int recvd = 0;
+			try{
+				int fromLen = sizeof(from);
 
-			int fromLen = sizeof(from);
-			int recvd = recvfrom(socket_,(char*) &packet, sizeof(packet), MSG_DONTWAIT, (SOCKADDR*) &from, &fromLen);
-			return true;
+				recvd = recvfrom(socket_, (char*)&packet, sizeof(packet), 0, (SOCKADDR*)&from, &fromLen);
+			}
+			catch(int e)
+			{
+
+			}
+			
+			return (recvd > 0);
+		}
+
+		void Close()
+		{
+			closesocket(socket_);
+			WSACleanup();
 		}
 
 		unsigned GetTicks() const {

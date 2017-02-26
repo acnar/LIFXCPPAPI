@@ -101,14 +101,22 @@ public:
     bool DiscoveryDone()
     {
         bool done = true;
-        for(const auto& it: devices)
-        {
-            if(it.second->Discovered() == false)
-            {
-                done = false;
-                break;
-            }
-        }
+		if (!devices.empty())
+		{
+			for (const auto& it : devices)
+			{
+				if (it.second->Discovered() == false)
+				{
+					done = false;
+					break;
+				}
+			}
+		}
+		else
+		{
+			done = false;
+		}
+        
         return done;
     }
     

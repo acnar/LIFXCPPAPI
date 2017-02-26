@@ -7,6 +7,14 @@
 # FT = Fade Time in ms
 # RT = Restore Time in ms
 
+D: Theater Lighting
+#D: Lights Off
+IP: 192.168.0.230
+G: Living Room
+VU: 
+VP: vlcpass
+L: 0
+
 N: Theater Lighting
 H: 0
 S: 0
@@ -16,11 +24,11 @@ P: 65535
 FT: 10000
 RT: 10000
 
-#N: Lights Off
-#H: 0
-#S: 0
-#B: 0
-#K: 0
-#P: 0
-#FT: 5000
-#RT: 5000
+N: Lights Off
+H: 0
+S: 0
+B: 0
+K: 0
+P: 0
+FT: 5000
+RT: 5000

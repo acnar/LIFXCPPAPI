@@ -308,9 +308,9 @@ class Packet {
     /* Frame */
     uint16_t size;            
     uint16_t protocol:12;
-	uint8_t addressable:1;
-	uint8_t tagged:1;		  // set to 1 to send to all devices (target all zeros) otherwise set to 1
-	uint8_t origin:2;
+	uint16_t addressable:1;
+	uint16_t tagged:1;		  // set to 1 to send to all devices (target all zeros) otherwise set to 0
+	uint16_t origin:2;
     uint32_t source;
 	
 	/* Frame Address */
@@ -430,7 +430,7 @@ public:
         std::stringstream ret;
 		if(tagged == 1)
 		{
-			ret << "tagged 1\n";
+			ret << "tagged: 1, ";
 		}
         ret << "size: " << size;
         ret << ", packet type: " << "0x" << std::hex << packet_type << std::dec;
