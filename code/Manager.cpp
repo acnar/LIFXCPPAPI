@@ -22,10 +22,11 @@ namespace lifx {
         socket = std::shared_ptr < Socket
                 > (Socket::CreateBroadcast(broadcastIP));
         groups.clear();
-		activeConfigName = "";
+		activeConfigNum = 0;
 		controlGroup = "";
 		lightsStartOn = 0;
-
+		num_configs = 1; // one config reserved for dimming off
+		lightState = LIGHTS_RESTORED;
     }
     
     void Manager::ListGroups(void)
@@ -64,7 +65,7 @@ namespace lifx {
 		}
     }
     
-    void Manager::SetColorAndPower(LIFXDevice* target, bool ack, bool save, const LIFXDeviceState* state, uint32_t fade_time)
+    bool Manager::SetColorAndPower(LIFXDevice* target, bool ack, bool save, const LIFXDeviceState* state, uint32_t fade_time)
     {
         Packet color;
 		Packet power;
@@ -139,7 +140,12 @@ namespace lifx {
         if(retries == 0)
         {
             perror("Unable to Set Color and/or Power\n");
+			return false;
         }
+		else
+		{
+			return true;
+		}
     }
     
     void Manager::ReadDevices(const std::string& fname) {
@@ -184,9 +190,9 @@ namespace lifx {
             getline(file, line);
             if(line[0] == 'N')
             {
-                config = new Config();
 				std::string name = StripNewline(line.substr(3, -1));
-                configs[name] = config;
+				config = new Config(name);
+                configs[num_configs++] = config;
             }
             if(line[0] == 'H')
             {
@@ -224,9 +230,9 @@ namespace lifx {
 			{
 				controlGroup = StripNewline(line.substr(3, -1));
 			}
-			if (line[0] == 'D')
+			if (line[0] == 'C')
 			{
-				activeConfigName = StripNewline(line.substr(3, -1));
+				activeConfigNum = std::stoi(line.substr(3, -1));
 			}
 			if (line[0] == 'V' && line[1] == 'U')
 			{
@@ -244,14 +250,19 @@ namespace lifx {
         
         file.close();
         
-        for(auto it : configs)
+		if (activeConfigNum >= num_configs)
+		{
+			// override invalid config
+			activeConfigNum = 0;
+		}
+		if (num_configs == 0)
+		{
+			std::cout << "Error, no configs found\n";
+			exit(1);
+		}
+        for(int i = 1; i < num_configs; i++)
         {
-			if (activeConfigName == "")
-			{
-				activeConfigName = it.first;
-			}
-            std::cout << it.first << "\n";
-            std::cout << it.second->ToString() << "\n";
+            std::cout << configs[i]->ToString() << "\n";
         }
     }
     
@@ -279,58 +290,85 @@ namespace lifx {
     
 	void Manager::LightsRestore(std::string group) {
         
+		bool success = true;
+
 		for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-                    SetColorAndPower(it2->second, true, false, 
-                                     it2->second->SavedState(),
-                                     configs[activeConfigName]->restore_time);
+					uint32_t restore_time = 0;
+					if (activeConfigNum != 0) restore_time = configs[activeConfigNum]->restore_time;
+					bool result = SetColorAndPower(it2->second, true, false,
+												it2->second->SavedState(),
+												restore_time);
+					if (!result)
+					{
+						success = false;
+					}
 				}
 			}
+		}
+		if (success)
+		{
+			lightState = LIGHTS_RESTORED;
 		}
 	}
 	
 	bool Manager::LightsDown(std::string group, bool save) {
 		
-        LIFXDeviceState dimState = LIFXDeviceState(configs[activeConfigName]->hue, 
-                                                    configs[activeConfigName]->saturation, 
-                                                    configs[activeConfigName]->brightness, 
-                                                    configs[activeConfigName]->kelvin, 
-                                                    configs[activeConfigName]->power, 
+		bool success = true;
+        LIFXDeviceState dimState = LIFXDeviceState(configs[activeConfigNum]->hue, 
+                                                    configs[activeConfigNum]->saturation, 
+                                                    configs[activeConfigNum]->brightness, 
+                                                    configs[activeConfigNum]->kelvin, 
+                                                    configs[activeConfigNum]->power, 
                                                     0);
 
         if(!DiscoveryDone(group))
         {
             return false;
         }
-
+		std::cout << "Discovery Done\n";
         for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
 			{
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
-                    dimState.brightness = configs[activeConfigName]->brightness;
-					if ((it2->second->Power() != 0) || (dimState.power != 0))
+					LIFXDeviceState* compareState;
+					if (lightState == LIGHTS_CONFIG_CHANGED) compareState = it2->second->SavedState();
+					else compareState = it2->second->State();
+					
+                    dimState.brightness = configs[activeConfigNum]->brightness;
+					if ((compareState->power != 0) || (dimState.power != 0))
 					{
-						if ((it2->second->Power() >= dimState.power))
+						if ((compareState->power >= dimState.power))
 						{
-							if (it2->second->Brightness() < dimState.brightness)
+							if (compareState->brightness < dimState.brightness)
 							{
-								dimState.brightness = it2->second->Brightness();
+								dimState.brightness = compareState->brightness;
 							}
 
-							SetColorAndPower(it2->second, true, true, &dimState, configs[activeConfigName]->fade_time);
+							bool result = SetColorAndPower(it2->second, true, true, &dimState, configs[activeConfigNum]->fade_time);
+
+							if (!result)
+							{
+								success = false;
+							}
 						}
 					}
 				}
 			}
 		}
+
+		if (success)
+		{
+			lightState = LIGHTS_DOWN;
+		}
         
-        return true;
+        return success;
 	}
 
     void Manager::Discover() {

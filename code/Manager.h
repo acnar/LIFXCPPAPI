@@ -4,11 +4,17 @@
 #pragma once
 
 namespace lifx {
- 
+#define MAX_CONFIGS 10
+
+#define LIGHTS_DOWN				1
+#define LIGHTS_RESTORED			2
+#define LIGHTS_CONFIG_CHANGED	3
+
 class Config {
     public:
-    Config()
+    Config(const std::string& n)
     {
+		name = n;
         hue = 0;
         saturation = 0;
         brightness = 0;
@@ -21,6 +27,7 @@ class Config {
     std::string ToString() const
     {
         std::stringstream ret;
+		ret << "Name: " << name << "\n";
 		ret << "Hue: " << hue << "\n";
 		ret << "Saturation: " << saturation << "\n";
         ret << "Brightness: " << brightness << "\n";
@@ -31,6 +38,7 @@ class Config {
 		return ret.str();
     }
     
+	std::string name;
     uint16_t hue;
     uint16_t saturation;
     uint16_t brightness;
@@ -63,7 +71,7 @@ class Manager {
 		void AddGroupDevice(std::string groupName, MacAddress target);
         void SubtractGroupDeviceAck(const MacAddress& target);
         void WaitForPackets(LIFXDevice* device, LIFXDeviceFn terminator, bool condition, unsigned to);
-		void SetColorAndPower(LIFXDevice* target, bool ack, bool save, const LIFXDeviceState* state, uint32_t fade_time);
+		bool SetColorAndPower(LIFXDevice* target, bool ack, bool save, const LIFXDeviceState* state, uint32_t fade_time);
         void ReadDevices(const std::string& fname);
         void WriteDevices(const std::string& fname);
         bool DiscoveryDone(const std::string& group);
@@ -73,15 +81,17 @@ class Manager {
         
 		std::shared_ptr<Socket> socket;
 		std::map<std::string, LIFXGroup*> groups;
-        std::map<std::string, Config*> configs;
+		Config* configs[MAX_CONFIGS];
+		int num_configs;
 		unsigned lastRecvTime;
 		std::string lastprint;
 		static const unsigned timeout = 1000;
-        std::string activeConfigName;
+        int activeConfigNum;
 		std::string controlGroup;
 		std::string vlcIP;
 		std::string vlcUname;
 		std::string vlcPass;
 		int lightsStartOn;
+		int lightState;
 };
 }
