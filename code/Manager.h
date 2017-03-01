@@ -6,10 +6,6 @@
 namespace lifx {
 #define MAX_CONFIGS 10
 
-#define LIGHTS_DOWN				1
-#define LIGHTS_RESTORED			2
-#define LIGHTS_CONFIG_CHANGED	3
-
 class Config {
     public:
     Config(const std::string& n)
@@ -76,6 +72,8 @@ class Manager {
         void WriteDevices(const std::string& fname);
         bool DiscoveryDone(const std::string& group);
 		std::string StripNewline(std::string str);
+		void SetLightState(int state);
+		void SaveGroup(std::string group);
         void ReadConfig();
 		void Close();
         
@@ -92,6 +90,7 @@ class Manager {
 		std::string vlcUname;
 		std::string vlcPass;
 		int lightsStartOn;
+		bool savePending;
 		int lightState;
 };
 }

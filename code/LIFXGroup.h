@@ -54,7 +54,9 @@ public:
 	
 	void SetDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, const bool& discovered)
 	{
-		devices[target.ToString()]->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered, discovered);
+		LIFXDevice* d = devices[target.ToString()];
+		d->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered, discovered);
+		//devices[target.ToString()]->SetAttributes(label, hue, saturation, brightness, kelvin, power, last_discovered, discovered);
 	}
 	
 	void PurgeOldDevices(unsigned currentTime)

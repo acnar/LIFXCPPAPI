@@ -47,7 +47,6 @@ public:
         kelvin = other.kelvin;
         power = other.power;
         timestamp = other.timestamp;
-        
         return *this;
     }
     
@@ -100,19 +99,26 @@ public:
     unsigned timestamp;
 };
 
+#define LIGHTS_DOWN				1
+#define LIGHTS_RESTORED			2
+#define LIGHTS_CONFIG_CHANGED	3
+
 class LIFXDevice {
-	public:
-         
+
+public:
+
 	LIFXDevice(const MacAddress& address = MacAddress())
 	{
 		name = "Unnamed Device";
 		addr = address;
-        state = new LIFXDeviceState();
-        savedState = new LIFXDeviceState();
-        pending_acks = 0;
-        discovered = false;
+		state = new LIFXDeviceState();
+		savedState = new LIFXDeviceState();
+		lightState = LIGHTS_RESTORED;
+		prevLightState = LIGHTS_RESTORED;
+		pending_acks = 0;
+		discovered = false;
 	}
-	
+
 	bool Expired(unsigned currentTime)
 	{
 		return ((state->timestamp + ExpiryTime) < currentTime);
@@ -120,62 +126,79 @@ class LIFXDevice {
 
 	const MacAddress& Address() const { return addr; }
 	void Address(const MacAddress& address) { addr = address; }
-    void Name(const std::string& n) { name = n; }
-    const std::string& Name() const {return name; }
-    void Timestamp(const unsigned& t) { state->timestamp = t; }
-    void Discovered(const bool& d) { discovered = d; }
-	
-    LIFXDeviceState* State() { return state; }
-    const bool& Discovered() const { return discovered; }
+	void Name(const std::string& n) { name = n; }
+	const std::string& Name() const { return name; }
+	void Timestamp(const unsigned& t) { state->timestamp = t; }
+	void Discovered(const bool& d) { discovered = d; }
+
+	LIFXDeviceState* State() { return state; }
+	const bool& Discovered() const { return discovered; }
 	const uint16_t& SavedHue() const { return savedState->hue; }
 	const uint16_t& SavedBrightness() const { return savedState->brightness; }
 	const uint16_t& SavedKelvin() const { return savedState->kelvin; }
 	const uint16_t& SavedSaturation() const { return savedState->saturation; }
 	const uint16_t& SavedPower() const { return savedState->power; }
-    LIFXDeviceState* SavedState() { return savedState; }
-    void SavedHue(const uint16_t& h) { savedState->hue = h; }
-    void SavedSaturation(const uint16_t& s) { savedState->saturation = s; }
-    void SavedBrightness(const uint16_t& b) { savedState->brightness = b; }
-    void SavedKelvin(const uint16_t& k) { savedState->kelvin = k; }
-    void SavedPower(const uint16_t& p) { savedState->power = p; }
-	
+	LIFXDeviceState* SavedState() { return savedState; }
+	void SavedHue(const uint16_t& h) { savedState->hue = h; }
+	void SavedSaturation(const uint16_t& s) { savedState->saturation = s; }
+	void SavedBrightness(const uint16_t& b) { savedState->brightness = b; }
+	void SavedKelvin(const uint16_t& k) { savedState->kelvin = k; }
+	void SavedPower(const uint16_t& p) { savedState->power = p; }
+
 	const uint16_t& Hue() const { return state->hue; }
 	const uint16_t& Saturation() const { return state->saturation; }
 	const uint16_t& Kelvin() const { return state->kelvin; }
 	const uint16_t& Brightness() const { return state->brightness; }
 	const uint16_t& Power() const { return state->power; }
-	
 
-    void Address(const std::string address) 
-    { 
-        addr.FromString(address); 
-    }
-    
-    unsigned SavedTime()
-    {
-        return savedState->timestamp;
-    }
-    
+
+	void Address(const std::string address)
+	{
+		addr.FromString(address);
+	}
+
+	unsigned SavedTime()
+	{
+		return savedState->timestamp;
+	}
+
 	void SaveState()
 	{
-        *savedState = *state;
+		*savedState = *state;
+		std::cout << "saved state " << name << "\n";
 	}
-    
-    void SaveTime(unsigned timestamp)
-    {
-        savedState->timestamp = timestamp;
-    }
-    
-    void ClearPendingAcks()
-    {
-        pending_acks = 0;
-    }
-    
-    bool HasPendingAcks()
-    {
-        return pending_acks > 0;
-    }
-    
+
+	void SaveTime(unsigned timestamp)
+	{
+		savedState->timestamp = timestamp;
+	}
+
+	void ClearPendingAcks()
+	{
+		pending_acks = 0;
+	}
+
+	bool HasPendingAcks()
+	{
+		return pending_acks > 0;
+	}
+
+	void SetLightState(int ls)
+	{
+		prevLightState = lightState;
+		lightState = ls;
+	}
+
+	const int& LightState()
+	{
+		return lightState;
+	}
+
+	const int& PrevLightState()
+	{
+		return prevLightState;
+	}
+
     void AddPendingAcks(uint32_t num_acks)
     {
         pending_acks += num_acks;
@@ -223,6 +246,8 @@ protected:
 
     uint32_t pending_acks;
     bool discovered;
+	int lightState;
+	int prevLightState;
 	
 	static const unsigned ExpiryTime = 120000;
 };

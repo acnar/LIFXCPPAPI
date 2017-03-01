@@ -25,7 +25,10 @@ namespace lifx {
 		activeConfigNum = 0;
 		controlGroup = "";
 		lightsStartOn = 0;
-		num_configs = 1; // one config reserved for dimming off
+		num_configs = 1; // one config reserved for dimming 
+		vlcUname = "";
+		vlcPass = "";
+		savePending = false;
 		lightState = LIGHTS_RESTORED;
     }
     
@@ -43,6 +46,16 @@ namespace lifx {
         }
 	}
 	
+	void Manager::SetLightState(int state)
+	{
+		//std::cout << "Setting all states to " << state << "\n";
+		lightState = state;
+		for (auto it : groups[controlGroup]->devices)
+		{
+			it.second->SetLightState(state);
+		}
+	}
+
 	void Manager::Send(Packet& packet) {
         //std::cout << "TX " << packet.ToString() << "\n";
         socket->Send(packet);
@@ -69,6 +82,7 @@ namespace lifx {
     {
         Packet color;
 		Packet power;
+		bool success = true;
 
         Payload::LightColorHSL color_payload;
 		Payload::SetPower power_payload;
@@ -92,14 +106,6 @@ namespace lifx {
         power.SetPower(power_payload, 0, target->Address(),1);
         color.SetLightColorHSL(color_payload, 0, target->Address(),1);
         uint32_t retries = 15;
-                
-        if(save)
-        {
-            if(target->SavedTime() < socket->GetTicks())
-            {
-                target->SaveState();
-            }
-        }
         
         while(retries > 0)
         {
@@ -117,13 +123,16 @@ namespace lifx {
                 /* Turn off the power last */
                 Send(power);
             }
+			//std::cout << "BKP" << target->Name() << " " << color_payload.brightness << " " << color_payload.kelvin << " " << power_payload.level << "\n";
         
             if(ack)
             {
+				//std::cout << "waiting for acks\n";
                 WaitForPackets(target, &LIFXDevice::HasPendingAcks, false, 200);
                 
                 if(!target->HasPendingAcks())
                 {
+					//std::cout << "ack success\n";
                     break;
                 }
                 
@@ -135,17 +144,33 @@ namespace lifx {
             }
         }
         
-        target->SaveTime(socket->GetTicks() + color_payload.fade_time);
-        
         if(retries == 0)
         {
             perror("Unable to Set Color and/or Power\n");
-			return false;
+			success = false;
+			//std::cout << "acks failed\n";
         }
 		else
 		{
-			return true;
+			// okay to save now assuming that discovery thread has not done discovery since
+			// sending new config (should be waiting for manager lock)
+			if (save)
+			{
+				// SavedTime will have been set as the time of save plus the length
+				// of the action 
+				if (target->SavedTime() < socket->GetTicks())
+				{
+					//std::cout << "saved time = " << target->SavedTime() << " curtime = " << socket->GetTicks() << "\n";
+					//std::cout << target->State()->ToString();
+					target->SaveState();
+				}
+			}
 		}
+
+		// Set the saved time as the current time plus the length of time that the new state will take to be applied.
+		target->SaveTime(socket->GetTicks() + color_payload.fade_time + 5000);
+
+		return success;
     }
     
     void Manager::ReadDevices(const std::string& fname) {
@@ -172,9 +197,12 @@ namespace lifx {
 
 	std::string Manager::StripNewline(std::string str)
 	{
-		if (str[str.length()-1] == '\n' || str[str.length()-1] == '\r')
+		if (str.length() > 0)
 		{
-			return str.substr(0, str.length()-1);
+			if (str[str.length() - 1] == '\n' || str[str.length() - 1] == '\r')
+			{
+				return str.substr(0, str.length() - 1);
+			}
 		}
 		return str;
 	}
@@ -188,40 +216,47 @@ namespace lifx {
         while(file)
         {
             getline(file, line);
-            if(line[0] == 'N')
-            {
-				std::string name = StripNewline(line.substr(3, -1));
-				config = new Config(name);
-                configs[num_configs++] = config;
-            }
-            if(line[0] == 'H')
-            {
-                config->hue = std::stoi(line.substr(3,-1));
-            }
-            if(line[0] == 'S')
-            {
-                config->saturation = std::stoi(line.substr(3,-1));
-            }
-            if(line[0] == 'B')
-            {
-                config->brightness = std::stoi(line.substr(3,-1));
-            }
-            if(line[0] == 'K')
-            {
-                config->kelvin = std::stoi(line.substr(3,-1));
-            }
-            if(line[0] == 'P')
-            {
-                config->power = std::stoi(line.substr(3,-1));
-            }
-            if(line[0] == 'F')
-            {
-                config->fade_time = std::stoi(line.substr(4,-1));
-            }
-            if(line[0] == 'R')
-            {
-                config->restore_time = std::stoi(line.substr(4,-1));
-            }
+			if (num_configs < MAX_CONFIGS)
+			{
+				if (line[0] == 'N')
+				{
+					std::string name = StripNewline(line.substr(3, -1));
+					config = new Config(name);
+					configs[num_configs++] = config;
+				}
+				if (line[0] == 'H')
+				{
+					config->hue = std::stoi(line.substr(3, -1));
+				}
+				if (line[0] == 'S')
+				{
+					config->saturation = std::stoi(line.substr(3, -1));
+				}
+				if (line[0] == 'B')
+				{
+					config->brightness = std::stoi(line.substr(3, -1));
+				}
+				if (line[0] == 'K')
+				{
+					config->kelvin = std::stoi(line.substr(3, -1));
+				}
+				if (line[0] == 'P')
+				{
+					config->power = std::stoi(line.substr(3, -1));
+				}
+				if (line[0] == 'F')
+				{
+					config->fade_time = std::stoi(line.substr(4, -1));
+				}
+				if (line[0] == 'R')
+				{
+					config->restore_time = std::stoi(line.substr(4, -1));
+				}
+			}
+			else
+			{
+				perror("Too many configs in config file\n.");
+			}
 			if (line[0] == 'I')
 			{
 				vlcIP = StripNewline(line.substr(4, -1));
@@ -278,14 +313,12 @@ namespace lifx {
 	
     bool Manager::DiscoveryDone(const std::string& group)
     {
+		bool done = false;
 		if (!groups.empty())
 		{
-			return groups[group]->DiscoveryDone();
+			done = groups[group]->DiscoveryDone();
 		}
-		else
-		{
-			return false;
-		}
+		return done;
     }
     
 	void Manager::LightsRestore(std::string group) {
@@ -307,6 +340,10 @@ namespace lifx {
 					{
 						success = false;
 					}
+					else
+					{
+						it2->second->SetLightState(LIGHTS_RESTORED);
+					}
 				}
 			}
 		}
@@ -325,12 +362,14 @@ namespace lifx {
                                                     configs[activeConfigNum]->kelvin, 
                                                     configs[activeConfigNum]->power, 
                                                     0);
-
-        if(!DiscoveryDone(group))
+		//std::cout << "Lights Down\n";
+		bool disc = DiscoveryDone(group);
+        if(disc == false)
         {
             return false;
         }
-		std::cout << "Discovery Done\n";
+	
+		//std::cout << "Discovery Done\n";
         for (std::map<std::string, LIFXGroup*>::iterator it=groups.begin(); it != groups.end(); ++it)
 		{
 			if(it->first == group)
@@ -338,24 +377,40 @@ namespace lifx {
 				for (std::map<std::string, LIFXDevice*>::iterator it2=it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
 				{
 					LIFXDeviceState* compareState;
-					if (lightState == LIGHTS_CONFIG_CHANGED) compareState = it2->second->SavedState();
-					else compareState = it2->second->State();
-					
-                    dimState.brightness = configs[activeConfigNum]->brightness;
-					if ((compareState->power != 0) || (dimState.power != 0))
+					bool save = true;
+					if (it2->second->LightState() != LIGHTS_DOWN) // it's possible this light's state was changed but the global state did not
 					{
-						if ((compareState->power >= dimState.power))
+						if (it2->second->LightState() == LIGHTS_CONFIG_CHANGED)
 						{
-							if (compareState->brightness < dimState.brightness)
+							compareState = it2->second->SavedState();
+							if (it2->second->PrevLightState() != LIGHTS_RESTORED)
 							{
-								dimState.brightness = compareState->brightness;
+								save = false;
 							}
+						}
+						else
+						{
+							compareState = it2->second->State();
+						}
 
-							bool result = SetColorAndPower(it2->second, true, true, &dimState, configs[activeConfigNum]->fade_time);
-
-							if (!result)
+						dimState.brightness = configs[activeConfigNum]->brightness;
+						if ((compareState->power != 0) || (dimState.power != 0))
+						{
+							if ((compareState->power >= dimState.power))
 							{
-								success = false;
+								if (compareState->brightness < dimState.brightness)
+								{
+									dimState.brightness = compareState->brightness;
+								}
+
+								if (SetColorAndPower(it2->second, true, save, &dimState, configs[activeConfigNum]->fade_time))
+								{
+									it2->second->SetLightState(LIGHTS_DOWN);
+								}
+								else
+								{
+									success = false;
+								}
 							}
 						}
 					}
@@ -365,10 +420,25 @@ namespace lifx {
 
 		if (success)
 		{
+			// set the global light state
 			lightState = LIGHTS_DOWN;
 		}
         
         return success;
+	}
+
+	void Manager::SaveGroup(std::string group)
+	{
+		for (std::map<std::string, LIFXGroup*>::iterator it = groups.begin(); it != groups.end(); ++it)
+		{
+			if (it->first == group)
+			{
+				for (std::map<std::string, LIFXDevice*>::iterator it2 = it->second->devices.begin(); it2 != it->second->devices.end(); ++it2)
+				{
+					it2->second->SaveState();
+				}
+			}
+		}
 	}
 
     void Manager::Discover() {
@@ -378,6 +448,15 @@ namespace lifx {
         Send(packet);
         WaitForPackets(nullptr, nullptr, false, timeout);
         PurgeOldDevices();
+
+		if (savePending)
+		{
+			if (DiscoveryDone(controlGroup))
+			{
+				SaveGroup(controlGroup);
+				savePending = false;
+			}
+		}
     }
 	
     void Manager::WaitForPackets(LIFXDevice* device, LIFXDeviceFn terminator, bool condition, unsigned to)

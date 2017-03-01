@@ -49,10 +49,17 @@ void discovery(Manager* manager)
 {
 	while(!done)
 	{
-		manager_mutex.lock();
-		manager->Discover();
-		//manager->ListGroups();
-		manager_mutex.unlock();
+		try
+		{
+			manager_mutex.lock();
+			manager->Discover();
+			//manager->ListGroups();
+			manager_mutex.unlock();
+		}
+		catch (...)
+		{
+			std::cout << "Exception in discovery\n";
+		}
 		std::this_thread::sleep_for (std::chrono::seconds(5));
 	}
 	
@@ -65,6 +72,7 @@ void vlc_listener(VLC* vlc, Manager* manager)
     bool success;
 
     while(!done){
+		manager_mutex.lock();
 		if (manager->activeConfigNum != 0)
 		{
 			success = vlc->GetState(playstate, fullscreen);
@@ -72,29 +80,19 @@ void vlc_listener(VLC* vlc, Manager* manager)
 				if (playstate == "playing" && fullscreen == "true" && manager->lightState != LIGHTS_DOWN)
 				{
 					bool set = false;
-					manager_mutex.lock();
-					std::cout << "lights down\n";
 					manager->LightsDown(manager->controlGroup, true);
-					manager_mutex.unlock();
-					
 				}
 				else if ((playstate != "playing" || fullscreen != "true") && manager->lightState == LIGHTS_DOWN)
 				{
-					manager_mutex.lock();
-					std::cout << "lights restored\n";
 					manager->LightsRestore(manager->controlGroup);
-					manager_mutex.unlock();
-					
 				}
 			}
 		}
 		else if (manager->lightState != LIGHTS_RESTORED)
 		{
-			manager_mutex.lock();
-			std::cout << "lights restored 1\n";
 			manager->LightsRestore(manager->controlGroup);
-			manager_mutex.unlock();
 		}
+		manager_mutex.unlock();
 
         std::this_thread::sleep_for (std::chrono::seconds(1));
     }
@@ -120,11 +118,13 @@ void hotkey_listener(Manager* manager)
 	MSG   msg = { 0 };
 	while (GetMessage(&msg, NULL, 0, 0) != 0 && !done) {
 		if (msg.message == WM_HOTKEY) {
-			if (msg.wParam < MAX_CONFIGS)
+			if (msg.wParam < manager->num_configs)
 			{
 				manager_mutex.lock();
 				manager->activeConfigNum = msg.wParam;
-				manager->lightState = LIGHTS_CONFIG_CHANGED;
+				std::cout << "active config changed to " << manager->activeConfigNum << "\n";
+				// config mode has changed 
+				manager->SetLightState(LIGHTS_CONFIG_CHANGED);
 				manager_mutex.unlock();
 			}
 		}
@@ -153,13 +153,19 @@ int main(int argc, const char* argv[]) {
 
 	manager->ReadConfig();
 
+	if (manager->groups.empty() || manager->groups[manager->controlGroup]->devices.empty())
+	{
+		/* No configs found.  Store current state as saved state after first discovery. */
+		manager->savePending = true;
+	}
+
 	if (manager->lightsStartOn == 1)
 	{
 		for (auto it1 : manager->groups)
 		{
 			for (auto it : it1.second->devices)
 			{
-				manager->SetColorAndPower(it.second, false, false, &state, 0);
+				manager->SetColorAndPower(it.second, true, false, &state, 0);
 			}
 		}
 	}
