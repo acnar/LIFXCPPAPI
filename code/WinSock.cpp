@@ -92,13 +92,26 @@ namespace lifx {
 			}
 		}
         
-        std::string Receive(int bytes)
-        {
-            std::string output(bytes, 0);
-			if (recv(socket_, &output[0], bytes - 1, 0) <= 0)
+		std::string Receive(int bytes)
+		{
+			std::string output(bytes, 0);
+			int r = recv(socket_, &output[0], bytes - 1, 0);
+			
+			if (r == 0)
+				printf("VLC Connection closed\n");
+			else
 			{
-				throw 0;
+				int last_error = WSAGetLastError();
+				//printf("recv failed: %d\n", last_error);
+				if ((last_error == WSAENOTCONN) || 
+					(last_error == WSAECONNRESET) ||
+					(last_error == WSAECONNABORTED))
+				{
+					throw 0;
+				}
 			}
+			
+		
             return output;
         }   
     
@@ -132,7 +145,7 @@ namespace lifx {
 			return (recvd > 0);
 		}
 
-		void Close()
+		void Close(bool final)
 		{
 			closesocket(socket_);
 			WSACleanup();

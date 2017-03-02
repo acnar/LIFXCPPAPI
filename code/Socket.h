@@ -21,7 +21,7 @@ public:
     virtual void Send(const Packet& packet) = 0;
     virtual std::string Receive(int bytes) = 0;
     virtual bool Receive(Packet& packet) = 0;
-	virtual void Close() = 0;
+	virtual void Close(bool final) = 0;
     virtual unsigned GetTicks() const = 0;
 };
 }

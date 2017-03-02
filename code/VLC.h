@@ -13,6 +13,7 @@ class VLC {
         {
             socket = std::shared_ptr < Socket
                 > (Socket::CreateStream(ip));
+			Connected(true);
         }
         catch(int e)
         {
@@ -23,6 +24,7 @@ class VLC {
 
 	void RetryConnect()
 	{
+		socket->Close(false);
 		socket = std::shared_ptr < Socket
 			>(Socket::CreateStream(addr));
 	}
@@ -53,9 +55,25 @@ class VLC {
 		return connected;
 	}
 
+	void Connected(bool c)
+	{
+		if (c == false)
+		{
+			sleep_time = 5;
+			//std::cout << "VLC Disconnected\n";
+		}
+		else
+		{
+			sleep_time = 1;
+			//std::cout << "VLC Connected\n";
+		}
+
+		connected = c;
+	}
+
 	void Close()
 	{
-		socket->Close();
+		socket->Close(false);
 	}
 
 	bool GetState(std::string& playstate, std::string& fullscreen)
@@ -65,6 +83,10 @@ class VLC {
         int fs_start, fs_end, s_start, s_end;
         bool success = false;
         
+		if (!Connected())
+		{
+			RetryConnect();
+		}
         HTTPPost();
 
         while(attempts < 3)
@@ -72,9 +94,11 @@ class VLC {
 			try
 			{
 				recvstring = socket->Receive(4096);
+				Connected(true);
 			}
 			catch (int e)
 			{
+				Connected(false);
 			}
             fs_start = recvstring.find("<fullscreen>");
             if(fs_start > 0)
@@ -98,6 +122,7 @@ class VLC {
         return success;
     }
     
+	unsigned sleep_time;
 private:
 	std::shared_ptr<Socket> socket;
     std::string authString;

@@ -110,7 +110,7 @@ public:
         return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
     }
 
-	void Close()
+	void Close(bool final)
 	{
 		close(write_sock);
 		close(read_sock);

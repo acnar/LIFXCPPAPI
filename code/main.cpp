@@ -94,7 +94,7 @@ void vlc_listener(VLC* vlc, Manager* manager)
 		}
 		manager_mutex.unlock();
 
-        std::this_thread::sleep_for (std::chrono::seconds(1));
+        std::this_thread::sleep_for (std::chrono::seconds(vlc->sleep_time));
     }
 
 	vlc->Close();

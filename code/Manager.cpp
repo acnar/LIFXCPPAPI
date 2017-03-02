@@ -487,7 +487,7 @@ namespace lifx {
     }
 
 	void Manager::Close() {
-		socket->Close();
+		socket->Close(true);
 	}
 	
 	void Manager::SetGroupDeviceAttributes(const MacAddress& target, const std::string& label, const uint16_t& hue, const uint16_t& saturation, const uint16_t& brightness, const uint16_t& kelvin, const uint16_t& power, const unsigned& last_discovered, bool discovered)
