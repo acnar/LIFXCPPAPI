@@ -120,7 +120,7 @@ namespace lifx {
 			if (sent != packet.GetSize()) {
 				std::cerr << WSAGetLastError() << " " << sent << " - UDP send error\n";
 			}
-			assert(sent == packet.GetSize());
+			//assert(sent == packet.GetSize());
 		}
 
 		bool Receive(Packet& packet) {
@@ -148,7 +148,11 @@ namespace lifx {
 		void Close(bool final)
 		{
 			closesocket(socket_);
-			WSACleanup();
+			if(final)
+			{ 
+				WSACleanup();
+			}
+			
 		}
 
 		unsigned GetTicks() const {
