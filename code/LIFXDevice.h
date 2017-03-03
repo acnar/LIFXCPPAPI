@@ -165,7 +165,7 @@ public:
 	void SaveState()
 	{
 		*savedState = *state;
-		std::cout << "saved state " << name << "\n";
+		//std::cout << "saved state " << name << "\n";
 	}
 
 	void SaveTime(unsigned timestamp)

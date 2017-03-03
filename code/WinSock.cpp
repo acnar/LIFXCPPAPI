@@ -43,14 +43,14 @@ namespace lifx {
 			dest.sin_addr.S_un.S_addr = inet_addr(ip.c_str());
 			dest.sin_port = htons(port);
 
-			u_long nonblock = 1;
-			ioctlsocket(socket_, FIONBIO, &nonblock);
-
 			if (broadcast)
 			{
 				const char * broadcastEnable = "1";
 				setsockopt(socket_, SOL_SOCKET, SO_BROADCAST, broadcastEnable,
 					sizeof(broadcastEnable));
+
+				int to = 1000;
+				setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&to, sizeof(to));
 
 				result = bind(socket_, (SOCKADDR*)&from, sizeof(from));
 				if (result == SOCKET_ERROR)
@@ -60,6 +60,9 @@ namespace lifx {
 			} 
 			else
 			{  
+				u_long nonblock = 1;
+				ioctlsocket(socket_, FIONBIO, &nonblock);
+
 				int v = connect(socket_, (sockaddr*)&dest, sizeof(dest));
 				if (v != 0)
 				{

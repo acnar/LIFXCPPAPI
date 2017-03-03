@@ -122,7 +122,7 @@ void hotkey_listener(Manager* manager)
 			{
 				manager_mutex.lock();
 				manager->activeConfigNum = msg.wParam;
-				std::cout << "active config changed to " << manager->activeConfigNum << "\n";
+				//std::cout << "active config changed to " << manager->activeConfigNum << "\n";
 				// config mode has changed 
 				manager->SetLightState(LIGHTS_CONFIG_CHANGED);
 				manager_mutex.unlock();
